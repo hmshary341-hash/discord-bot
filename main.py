@@ -1,5 +1,7 @@
 import os
+import asyncio
 import discord
+from discord.ext import commands
 from flask import Flask
 from threading import Thread
 
@@ -17,31 +19,34 @@ def keep_alive():
     t = Thread(target=run)
     t.start()
 
-# إعدادات ديسكورد الأساسية
+# إعدادات البوت والأوامر
 intents = discord.Intents.default()
 intents.message_content = True
 
-client = discord.Client(intents=intents)
+bot = commands.Bot(command_prefix='!', intents=intents)
 
-@client.event
+@bot.event
 async def on_ready():
-    print(f'تم تسجيل الدخول بنجاح باسم: {client.user}')
+    print(f'تم تسجيل الدخول بنجاح باسم: {bot.user}')
 
-@client.event
-async def on_message(message):
-    if message.author == client.user:
-        return
+# دالة لتحميل جميع الأقسام من مجلد cogs تلقائياً
+async def load_extensions():
+    if not os.path.exists('./cogs'):
+        os.makedirs('./cogs')
+    for filename in os.listdir('./cogs'):
+        if filename.endswith('.py'):
+            await bot.load_extension(f'cogs.{filename[:-3]}')
+            print(f'تم تحميل القسم: {filename}')
 
-    if message.content == '!ping':
-        await message.channel.send('Pong!')
+async def main():
+    keep_alive()
+    async with bot:
+        await load_extensions()
+        token = os.getenv('TOKEN')
+        if not token:
+            print("خطأ: لم يتم العثور على التوكن!")
+        else:
+            await bot.start(token)
 
-# تشغيل سيرفر الويب أولاً
-keep_alive()
-
-# جلب التوكن من متغيرات البيئة بدقة
-token = os.getenv('TOKEN')
-
-if not token:
-    print("خطأ: لم يتم العثور على التوكن! تأكد من إضافته في قسم Variables في منصة Railway.")
-else:
-    client.run(token)
+if __name__ == '__main__':
+    asyncio.run(main())
