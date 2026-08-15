@@ -1,5 +1,6 @@
 import discord
 from discord.ext import commands
+from discord import app_commands  # إضافة ضرورية للسلاش كوماند
 import asyncio
 from datetime import datetime
 
@@ -192,16 +193,17 @@ class Tickets(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command(name='ticket')
-    @commands.has_permissions(administrator=True)
-    async def ticket(self, ctx):
+    # التعديل هنا: تحويل الأمر إلى Slash Command
+    @app_commands.command(name='ticket', description='فتح مركز التكتات والمساعدة')
+    @app_commands.checks.has_permissions(administrator=True)
+    async def ticket(self, interaction: discord.Interaction):
         embed = discord.Embed(
             title="مركز التكتات والمساعدة 🎫",
             description="اختر القسم المناسب من الأزرار بالأسفل لفتح تكت جديد وتعبئة التفاصيل:",
             color=discord.Color.blue()
         )
         embed.set_image(url="https://cdn.discordapp.com/attachments/1536682727531745291/1538123383462436884/file_00000000876482468a3bff92f21e3939.png?ex=6a818887&is=6a803707&hm=d216e646dc54fb9eee3ee9b3a99d1838fe96619fe3447150d094d03f9cf22964&")
-        await ctx.send(embed=embed, view=TicketMainView())
+        await interaction.response.send_message(embed=embed, view=TicketMainView())
 
 async def setup(bot):
     await bot.add_cog(Tickets(bot))
