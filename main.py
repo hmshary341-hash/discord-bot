@@ -5,9 +5,8 @@ from discord.ext import commands
 from flask import Flask
 from threading import Thread
 
-# إعداد سيرفر الويب المصغر لمنع البوت من النوم
+# إعداد سيرفر الويب المصغر
 app = Flask('')
-
 @app.route('/')
 def home():
     return "Bot is alive and running!"
@@ -19,33 +18,32 @@ def keep_alive():
     t = Thread(target=run)
     t.start()
 
-# إعدادات البوت والأوامر
+# إعدادات البوت
 intents = discord.Intents.default()
 intents.message_content = True
-
 bot = commands.Bot(command_prefix='!', intents=intents)
 
 @bot.event
 async def on_ready():
     print(f'تم تسجيل الدخول بنجاح باسم: {bot.user}')
+    # مزامنة الأوامر للسيرفر الخاص بك
     try:
-        # ربط الأوامر فورياً بسيرفرك باستخدام الآيدي الذي أرسلته
-        MY_GUILD = discord.Object(id=1536684342154109019)
-        
-        bot.tree.copy_global_to(guild=MY_GUILD)
-        synced = await bot.tree.sync(guild=MY_GUILD)
-        print(f'تم مزامنة {len(synced)} أمر سلاش فورياً في السيرفر الخاص بك.')
+        guild = discord.Object(id=1536684342154109019)
+        synced = await bot.tree.sync(guild=guild)
+        print(f'تمت المزامنة بنجاح لـ {len(synced)} أمر في السيرفر.')
     except Exception as e:
-        print(f'خطأ في مزامنة الأوامر: {e}')
+        print(f'خطأ أثناء المزامنة: {e}')
 
-# دالة لتحميل جميع الأقسام من مجلد cogs تلقائياً
 async def load_extensions():
     if not os.path.exists('./cogs'):
         os.makedirs('./cogs')
     for filename in os.listdir('./cogs'):
         if filename.endswith('.py'):
-            await bot.load_extension(f'cogs.{filename[:-3]}')
-            print(f'تم تحميل القسم: {filename}')
+            try:
+                await bot.load_extension(f'cogs.{filename[:-3]}')
+                print(f'تم تحميل القسم: {filename}')
+            except Exception as e:
+                print(f'خطأ في تحميل {filename}: {e}')
 
 async def main():
     keep_alive()
