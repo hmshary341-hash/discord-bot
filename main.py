@@ -38,8 +38,8 @@ async def on_message(message):
 # تشغيل سيرفر الويب أولاً
 keep_alive()
 
-# البحث عن التوكن بأكثر من احتمال لمنع خطأ NoneType
-token = os.getenv('TOKEN') or os.getenv('DISCORD_TOKEN')
+# جلب التوكن من متغيرات البيئة بدقة
+token = os.getenv('TOKEN')
 
 if not token:
     print("خطأ: لم يتم العثور على التوكن! تأكد من إضافته في قسم Variables في منصة Railway.")
