@@ -4,7 +4,7 @@ from discord.ext import commands
 from flask import Flask
 from threading import Thread
 
-# Flask (keep as is)
+# Flask
 app = Flask('')
 @app.route('/')
 def home(): return "Bot is alive!"
@@ -22,16 +22,12 @@ class MyBot(commands.Bot):
                 if filename.endswith('.py'):
                     await self.load_extension(f'cogs.{filename[:-3]}')
         
-        # 2. كاشف الأخطاء: اطبع الأوامر التي يراها البوت قبل المزامنة
-        commands_found = self.tree.get_commands()
-        print(f"DEBUG: الأوامر الموجودة حالياً في الـ Tree هي: {[c.name for c in commands_found]}")
-
-        # 3. محاولة المزامنة
+        # 2. مزامنة فورية ونسخ الأمر للسيرفر الخاص بك
         try:
             MY_GUILD = discord.Object(id=1536684342154109019)
-            # تجربة مزامنة السيرفر الخاص
+            self.tree.copy_global_to(guild=MY_GUILD)  # السطر السحري لنسخ الأمر للسيرفر
             synced = await self.tree.sync(guild=MY_GUILD)
-            print(f'تمت المزامنة بنجاح لـ {len(synced)} أمر.')
+            print(f'تمت المزامنة بنجاح لـ {len(synced)} أمر في السيرفر.')
         except Exception as e:
             print(f'خطأ في المزامنة: {e}')
 
