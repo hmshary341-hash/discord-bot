@@ -1,65 +1,44 @@
 import os
-import asyncio
 import discord
 from discord.ext import commands
 from flask import Flask
 from threading import Thread
 
-# إعداد سيرفر الويب المصغر لمنع البوت من النوم
+# Flask (keep as is)
 app = Flask('')
-
 @app.route('/')
-def home():
-    return "Bot is alive and running!"
-
-def run():
-    app.run(host='0.0.0.0', port=8080)
-
-def keep_alive():
-    t = Thread(target=run)
-    t.start()
-
-# إعدادات البوت
-intents = discord.Intents.default()
-intents.message_content = True
+def home(): return "Bot is alive!"
+def run(): app.run(host='0.0.0.0', port=8080)
+def keep_alive(): Thread(target=run).start()
 
 class MyBot(commands.Bot):
     def __init__(self):
-        super().__init__(command_prefix='!', intents=intents)
+        super().__init__(command_prefix="!", intents=discord.Intents.default())
 
     async def setup_hook(self):
-        # تحميل جميع الأقسام (Cogs) تلقائياً
-        if not os.path.exists('./cogs'):
-            os.makedirs('./cogs')
-        for filename in os.listdir('./cogs'):
-            if filename.endswith('.py'):
-                try:
+        # 1. تحميل الملفات
+        if os.path.exists('./cogs'):
+            for filename in os.listdir('./cogs'):
+                if filename.endswith('.py'):
                     await self.load_extension(f'cogs.{filename[:-3]}')
-                    print(f'تم تحميل القسم: {filename}')
-                except Exception as e:
-                    print(f'خطأ في تحميل {filename}: {e}')
+        
+        # 2. كاشف الأخطاء: اطبع الأوامر التي يراها البوت قبل المزامنة
+        commands_found = self.tree.get_commands()
+        print(f"DEBUG: الأوامر الموجودة حالياً في الـ Tree هي: {[c.name for c in commands_found]}")
 
-        # مزامنة الأوامر فورياً للسيرفر الخاص بك
+        # 3. محاولة المزامنة
         try:
-            guild = discord.Object(id=1536684342154109019)
-            synced = await self.tree.sync(guild=guild)
-            print(f'تمت المزامنة بنجاح لـ {len(synced)} أمر في السيرفر.')
+            MY_GUILD = discord.Object(id=1536684342154109019)
+            # تجربة مزامنة السيرفر الخاص
+            synced = await self.tree.sync(guild=MY_GUILD)
+            print(f'تمت المزامنة بنجاح لـ {len(synced)} أمر.')
         except Exception as e:
-            print(f'خطأ أثناء المزامنة: {e}')
+            print(f'خطأ في المزامنة: {e}')
 
 bot = MyBot()
-
 @bot.event
 async def on_ready():
-    print(f'تم تسجيل الدخول بنجاح باسم: {bot.user}')
+    print(f'تم تسجيل الدخول: {bot.user}')
 
-async def main():
-    keep_alive()
-    token = os.getenv('TOKEN')
-    if not token:
-        print("خطأ: لم يتم العثور على التوكن!")
-    else:
-        await bot.start(token)
-
-if __name__ == '__main__':
-    asyncio.run(main())
+keep_alive()
+bot.run(os.getenv('TOKEN'))
