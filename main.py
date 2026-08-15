@@ -35,8 +35,13 @@ async def on_message(message):
     if message.content == '!ping':
         await message.channel.send('Pong!')
 
-# تشغيل سيرفر الويب أولاً ثم تشغيل البوت
+# تشغيل سيرفر الويب أولاً
 keep_alive()
 
-token = os.getenv('TOKEN')
-client.run(token)
+# البحث عن التوكن بأكثر من احتمال لمنع خطأ NoneType
+token = os.getenv('TOKEN') or os.getenv('DISCORD_TOKEN')
+
+if not token:
+    print("خطأ: لم يتم العثور على التوكن! تأكد من إضافته في قسم Variables في منصة Railway.")
+else:
+    client.run(token)
