@@ -28,6 +28,11 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 @bot.event
 async def on_ready():
     print(f'تم تسجيل الدخول بنجاح باسم: {bot.user}')
+    try:
+        synced = await bot.tree.sync()
+        print(f'تم مزامنة {len(synced)} أمر سلاش بنجاح.')
+    except Exception as e:
+        print(f'خطأ في مزامنة الأوامر: {e}')
 
 # دالة لتحميل جميع الأقسام من مجلد cogs تلقائياً
 async def load_extensions():
