@@ -5,8 +5,9 @@ from discord.ext import commands
 from flask import Flask
 from threading import Thread
 
-# إعداد سيرفر الويب المصغر
+# إعداد سيرفر الويب المصغر لمنع البوت من النوم
 app = Flask('')
+
 @app.route('/')
 def home():
     return "Bot is alive and running!"
@@ -21,39 +22,44 @@ def keep_alive():
 # إعدادات البوت
 intents = discord.Intents.default()
 intents.message_content = True
-bot = commands.Bot(command_prefix='!', intents=intents)
+
+class MyBot(commands.Bot):
+    def __init__(self):
+        super().__init__(command_prefix='!', intents=intents)
+
+    async def setup_hook(self):
+        # تحميل جميع الأقسام (Cogs) تلقائياً
+        if not os.path.exists('./cogs'):
+            os.makedirs('./cogs')
+        for filename in os.listdir('./cogs'):
+            if filename.endswith('.py'):
+                try:
+                    await self.load_extension(f'cogs.{filename[:-3]}')
+                    print(f'تم تحميل القسم: {filename}')
+                except Exception as e:
+                    print(f'خطأ في تحميل {filename}: {e}')
+
+        # مزامنة الأوامر فورياً للسيرفر الخاص بك
+        try:
+            guild = discord.Object(id=1536684342154109019)
+            synced = await self.tree.sync(guild=guild)
+            print(f'تمت المزامنة بنجاح لـ {len(synced)} أمر في السيرفر.')
+        except Exception as e:
+            print(f'خطأ أثناء المزامنة: {e}')
+
+bot = MyBot()
 
 @bot.event
 async def on_ready():
     print(f'تم تسجيل الدخول بنجاح باسم: {bot.user}')
-    # مزامنة الأوامر للسيرفر الخاص بك
-    try:
-        guild = discord.Object(id=1536684342154109019)
-        synced = await bot.tree.sync(guild=guild)
-        print(f'تمت المزامنة بنجاح لـ {len(synced)} أمر في السيرفر.')
-    except Exception as e:
-        print(f'خطأ أثناء المزامنة: {e}')
-
-async def load_extensions():
-    if not os.path.exists('./cogs'):
-        os.makedirs('./cogs')
-    for filename in os.listdir('./cogs'):
-        if filename.endswith('.py'):
-            try:
-                await bot.load_extension(f'cogs.{filename[:-3]}')
-                print(f'تم تحميل القسم: {filename}')
-            except Exception as e:
-                print(f'خطأ في تحميل {filename}: {e}')
 
 async def main():
     keep_alive()
-    async with bot:
-        await load_extensions()
-        token = os.getenv('TOKEN')
-        if not token:
-            print("خطأ: لم يتم العثور على التوكن!")
-        else:
-            await bot.start(token)
+    token = os.getenv('TOKEN')
+    if not token:
+        print("خطأ: لم يتم العثور على التوكن!")
+    else:
+        await bot.start(token)
 
 if __name__ == '__main__':
     asyncio.run(main())
