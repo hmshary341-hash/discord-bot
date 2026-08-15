@@ -29,8 +29,12 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 async def on_ready():
     print(f'تم تسجيل الدخول بنجاح باسم: {bot.user}')
     try:
-        synced = await bot.tree.sync()
-        print(f'تم مزامنة {len(synced)} أمر سلاش بنجاح.')
+        # ربط الأوامر فورياً بسيرفرك باستخدام الآيدي الذي أرسلته
+        MY_GUILD = discord.Object(id=1536684342154109019)
+        
+        bot.tree.copy_global_to(guild=MY_GUILD)
+        synced = await bot.tree.sync(guild=MY_GUILD)
+        print(f'تم مزامنة {len(synced)} أمر سلاش فورياً في السيرفر الخاص بك.')
     except Exception as e:
         print(f'خطأ في مزامنة الأوامر: {e}')
 
