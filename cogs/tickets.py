@@ -1,14 +1,30 @@
 import discord
 from discord.ext import commands
-from discord import app_commands  # إضافة ضرورية للسلاش كوماند
+from discord import app_commands
 import asyncio
 from datetime import datetime
+import os
+
+# دالة لإنشاء رقم تسلسلي متصاعد وحفظه
+def get_next_ticket_number():
+    counter_file = "ticket_counter.txt"
+    num = 0
+    if os.path.exists(counter_file):
+        try:
+            with open(counter_file, "r") as f:
+                num = int(f.read().strip())
+        except:
+            num = 0
+    num += 1
+    with open(counter_file, "w") as f:
+        f.write(str(num))
+    return f"#{num:04d}", f"{num}"
 
 # 1. نموذج شكوى على إداري
 class StaffComplaintModal(discord.ui.Modal, title="شكوى على إداري"):
-    staff_name = discord.ui.TextInput(label="يوزر أو مينشن الإداري", placeholder="مثال: @Admin", required=True)
-    reason = discord.ui.TextInput(label="السبب", style=discord.TextStyle.paragraph, placeholder="اكتب سبب الشكوى بالتفصيل...", required=True)
-    proof = discord.ui.TextInput(label="الدليل", placeholder="رابط الدليل (صورة أو فيديو)", required=True)
+    staff_name = discord.ui.TextInput(label="يوزر أو مينشن الإداري", required=True)
+    reason = discord.ui.TextInput(label="السبب", style=discord.TextStyle.paragraph, required=True)
+    proof = discord.ui.TextInput(label="الدليل", required=True)
 
     async def on_submit(self, interaction: discord.Interaction):
         await create_ticket_channel(interaction, "شكوى على إداري", {
@@ -19,9 +35,9 @@ class StaffComplaintModal(discord.ui.Modal, title="شكوى على إداري"):
 
 # 2. نموذج شكوى على عضو
 class MemberComplaintModal(discord.ui.Modal, title="شكوى على عضو"):
-    member_name = discord.ui.TextInput(label="يوزر أو مينشن العضو", placeholder="مثال: @Member", required=True)
-    reason = discord.ui.TextInput(label="السبب", style=discord.TextStyle.paragraph, placeholder="اكتب سبب الشكوى بالتفصيل...", required=True)
-    proof = discord.ui.TextInput(label="الدليل", placeholder="رابط الدليل (صورة أو فيديو)", required=True)
+    member_name = discord.ui.TextInput(label="يوزر أو مينشن العضو", required=True)
+    reason = discord.ui.TextInput(label="السبب", style=discord.TextStyle.paragraph, required=True)
+    proof = discord.ui.TextInput(label="الدليل", required=True)
 
     async def on_submit(self, interaction: discord.Interaction):
         await create_ticket_channel(interaction, "شكوى على عضو", {
@@ -32,8 +48,8 @@ class MemberComplaintModal(discord.ui.Modal, title="شكوى على عضو"):
 
 # 3. نموذج ترقية
 class PromotionModal(discord.ui.Modal, title="طلب ترقية"):
-    old_rank = discord.ui.TextInput(label="رتبتك القديمة", placeholder="مثال: عضو / مراقب", required=True)
-    new_rank = discord.ui.TextInput(label="رتبتك الجديدة المطلوبة", placeholder="مثال: إداري", required=True)
+    old_rank = discord.ui.TextInput(label="رتبتك القديمة", required=True)
+    new_rank = discord.ui.TextInput(label="رتبتك الجديدة المطلوبة", required=True)
 
     async def on_submit(self, interaction: discord.Interaction):
         await create_ticket_channel(interaction, "ترقية", {
@@ -41,7 +57,6 @@ class PromotionModal(discord.ui.Modal, title="طلب ترقية"):
             "رتبتك الجديدة": self.new_rank.value
         })
 
-# الأزرار الرئيسية في قائمة التكتات
 class TicketMainView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
@@ -58,148 +73,115 @@ class TicketMainView(discord.ui.View):
     async def member_complaint(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(MemberComplaintModal())
 
-    @discord.ui.button(label="إستفسار", style=discord.ButtonStyle.success, emoji="❓", custom_id="ticket_inquiry")
-    async def inquiry(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await create_ticket_channel(interaction, "إستفسار", {"نوع التكت": "استفسار عام"})
-
     @discord.ui.button(label="ترقية", style=discord.ButtonStyle.primary, emoji="⭐", custom_id="ticket_promotion")
     async def promotion(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(PromotionModal())
 
-# نموذج سؤال الإغلاق (هل انحلت المشكلة؟)
-class CloseReasonModal(discord.ui.Modal, title="إغلاق التكت"):
-    is_solved = discord.ui.TextInput(label="هل انحلت المشكلة؟", placeholder="اكتب نعم أو لا مع ذكر التفاصيل باختصار", required=True)
-
-    def __init__(self, user, open_time, claim_time, claimed_by):
-        super().__init__()
-        self.user = user
-        self.open_time = open_time
-        self.claim_time = claim_time
-        self.claimed_by = claimed_by
-
-    async def on_submit(self, interaction: discord.Interaction):
-        close_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        closed_by = interaction.user
-
-        summary_embed = discord.Embed(
-            title="🔒 تقرير إغلاق التكت",
-            color=discord.Color.red()
-        )
-        summary_embed.add_field(name="صاحب التكت", value=self.user.mention, inline=False)
-        summary_embed.add_field(name="المشرف الذي استلم التكت", value=self.claimed_by.mention if self.claimed_by else "لم يتم الاستلام", inline=False)
-        summary_embed.add_field(name="المشرف الذي أغلق التكت", value=closed_by.mention, inline=False)
-        summary_embed.add_field(name="وقت الفتح", value=self.open_time, inline=True)
-        summary_embed.add_field(name="وقت الاستلام", value=self.claim_time if self.claim_time else "غير مطبق", inline=True)
-        summary_embed.add_field(name="وقت الإغلاق", value=close_time, inline=True)
-        summary_embed.add_field(name="هل انحلت المشكلة؟", value=self.is_solved.value, inline=False)
-
-        await interaction.response.send_message(embed=summary_embed)
-        await asyncio.sleep(5)
-        await interaction.channel.delete()
-
-# أزرار التحكم داخل تكت القناة (استلام + إغلاق)
+# أزرار التحكم (محمية برتبة الإدارة المحددة)
 class TicketControlView(discord.ui.View):
-    def __init__(self, user, open_time):
+    def __init__(self, user, open_time, ticket_type, ticket_number):
         super().__init__(timeout=None)
         self.user = user
         self.open_time = open_time
+        self.ticket_type = ticket_type
+        self.ticket_number = ticket_number
         self.claimed_by = None
         self.claim_time = None
 
     @discord.ui.button(label="استلام التكت", style=discord.ButtonStyle.green, emoji="🙋‍♂️", custom_id="claim_ticket")
     async def claim(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if not interaction.user.guild_permissions.manage_channels:
-            await interaction.response.send_message("هذا الزر مخصص للإدارة فقط!", ephemeral=True)
-            return
-
-        if self.claimed_by:
-            await interaction.response.send_message(f"تم استلام هذا التكت مسبقاً بواسطة {self.claimed_by.mention}", ephemeral=True)
-            return
-
+        staff_role_id = 1538498863890173952
+        has_role = any(role.id == staff_role_id for role in interaction.user.roles)
+        
+        if not (has_role or interaction.user.guild_permissions.administrator):
+            return await interaction.response.send_message("هذا الزر مخصص للإدارة فقط!", ephemeral=True)
+        
         self.claimed_by = interaction.user
-        self.claim_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        self.claim_time = datetime.now().strftime("%I:%M %p | %d/%m/%Y")
         button.disabled = True
-        button.label = f"استلمه: {interaction.user.name}"
+        
+        embed = create_ticket_embed(self.user, self.ticket_type, self.open_time, self.claimed_by, self.claim_time, "مفتوح", self.ticket_number)
+        await interaction.response.edit_message(embed=embed, view=self)
+        await interaction.followup.send(f"استلم التكت: {interaction.user.mention}")
 
-        await interaction.response.edit_message(view=self)
-        await interaction.followup.send(f"قام الإداري {interaction.user.mention} باستلام التكت بنجاح.")
-
-    @discord.ui.button(label="إغلاق التكت", style=discord.ButtonStyle.danger, emoji="🔒", custom_id="close_ticket_button")
+    @discord.ui.button(label="إغلاق التكت", style=discord.ButtonStyle.danger, emoji="🔒", custom_id="close_ticket")
     async def close(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if not interaction.user.guild_permissions.manage_channels:
-            await interaction.response.send_message("هذا الزر مخصص للإدارة فقط!", ephemeral=True)
-            return
+        staff_role_id = 1538498863890173952
+        has_role = any(role.id == staff_role_id for role in interaction.user.roles)
+        
+        if not (has_role or interaction.user.guild_permissions.administrator):
+            return await interaction.response.send_message("هذا الزر مخصص للإدارة فقط!", ephemeral=True)
 
-        modal = CloseReasonModal(
-            user=self.user,
-            open_time=self.open_time,
-            claim_time=self.claim_time,
-            claimed_by=self.claimed_by
-        )
-        await interaction.response.send_modal(modal)
+        await interaction.response.send_message("جاري إغلاق التكت...", ephemeral=True)
+        await asyncio.sleep(2)
+        await interaction.channel.delete()
 
-# دالة موحدة لإنشاء روم التكت
+# وظيفة لتصميم رسالة التكت
+def create_ticket_embed(user, ticket_type, open_time, claimer=None, claim_time=None, status="مفتوح", ticket_number="#0001"):
+    embed = discord.Embed(title="╭━━━━━━━━━━━━━━━━━━━━━━━━━━━━╮\n✦ 𝗧𝗜𝗖𝗞𝗘𝗧 𝗦𝗬𝗦𝗧𝗘𝗠 ✦\n╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯", color=discord.Color.blue())
+    
+    embed.add_field(name="「👤」 فــاتــح الــتــكــت", value=f"「 {user.mention} 」", inline=False)
+    embed.add_field(name="「🛡️」 مــســتــلــم الــتــكــت", value=f"「 {claimer.mention if claimer else 'لا يوجد'} 」", inline=False)
+    embed.add_field(name="「📂」 نــوع الــتــكــت", value=f"「 {ticket_type} 」", inline=False)
+    embed.add_field(name="「🕐」 وقــت فــتــح الــتــكــت", value=f"「 {open_time} 」", inline=False)
+    embed.add_field(name="「🆔」 رقــم الــتــكــت", value=f"「 {ticket_number} 」", inline=False)
+    embed.add_field(name="「📌」 حــالــة الــتــكــت", value=f"「 🟢 {status} 」", inline=False)
+    
+    role_user = user.top_role.mention if hasattr(user, 'top_role') else "@عضو"
+    role_claimer = claimer.top_role.mention if claimer and hasattr(claimer, 'top_role') else "لا يوجد"
+    
+    embed.add_field(name="\n╭━━━━━━━━━━━━━━━━━━━━━━━━━━━━╮\n✦ حــالــة الــتــكــت ✦\n╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯", value="", inline=False)
+    embed.add_field(name="「🔓」 فــتــح الــتــكــت بــواســطــة", value=f"「 {role_user} 」", inline=False)
+    embed.add_field(name="「🎫」 اســتــلام الــتــكــت بــواســطــة", value=f"「 {role_claimer} 」", inline=False)
+    
+    return embed
+
 async def create_ticket_channel(interaction: discord.Interaction, ticket_type: str, details: dict):
     guild = interaction.guild
-    user = interaction.user
+    category = discord.utils.get(guild.categories, id=1536706404176633866)
+    
+    ticket_number, ticket_num_clean = get_next_ticket_number()
 
-    existing_channel = discord.utils.get(guild.text_channels, name=f"ticket-{user.name.lower()}")
-    if existing_channel:
-        if interaction.response.is_done():
-            await interaction.followup.send(f"لديك تكت مفتوح مسبقاً: {existing_channel.mention}", ephemeral=True)
-        else:
-            await interaction.response.send_message(f"لديك تكت مفتوح مسبقاً: {existing_channel.mention}", ephemeral=True)
-        return
+    # جلب رتبة الإدارة وإعطائها الصلاحيات في التكت
+    staff_role = guild.get_role(1538498863890173952)
 
     overwrites = {
         guild.default_role: discord.PermissionOverwrite(view_channel=False),
-        user: discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True),
-        guild.me: discord.PermissionOverwrite(view_channel=True, send_messages=True)
+        interaction.user: discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True)
     }
-
-    category = discord.utils.get(guild.categories, name="Tickets")
-    if not category:
-        category = await guild.create_category("Tickets")
+    
+    if staff_role:
+        overwrites[staff_role] = discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True)
 
     channel = await guild.create_text_channel(
-        name=f"ticket-{user.name}",
+        name=f"ticket-{ticket_num_clean}",
         category=category,
         overwrites=overwrites
     )
 
-    open_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-    embed = discord.Embed(
-        title=f"تكت جديد: {ticket_type}",
-        description=f"مرحباً {user.mention}!\nتم فتح التكت بنجاح، يرجى انتظار رد الإدارة.",
-        color=discord.Color.blue()
-    )
-    embed.add_field(name="صاحب التكت", value=user.mention, inline=True)
-    embed.add_field(name="وقت الفتح", value=open_time, inline=True)
-
-    for key, value in details.items():
-        embed.add_field(name=key, value=value, inline=False)
-
-    view = TicketControlView(user=user, open_time=open_time)
-
-    if not interaction.response.is_done():
-        await interaction.response.send_message(f"تم إنشاء التكت الخاص بك: {channel.mention}", ephemeral=True)
-    else:
-        await interaction.followup.send(f"تم إنشاء التكت الخاص بك: {channel.mention}", ephemeral=True)
-
+    open_time = datetime.now().strftime("%I:%M %p | %d/%m/%Y")
+    embed = create_ticket_embed(interaction.user, ticket_type, open_time, ticket_number=ticket_number)
+    
+    view = TicketControlView(interaction.user, open_time, ticket_type, ticket_number)
     await channel.send(embed=embed, view=view)
+    
+    details_embed = discord.Embed(title="تفاصيل التكت", color=discord.Color.green())
+    for k, v in details.items():
+        details_embed.add_field(name=k, value=v, inline=False)
+    await channel.send(embed=details_embed)
+
+    await interaction.response.send_message(f"تم فتح التكت: {channel.mention}", ephemeral=True)
 
 class Tickets(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    # التعديل هنا: تحويل الأمر إلى Slash Command
     @app_commands.command(name='ticket', description='فتح مركز التكتات والمساعدة')
     @app_commands.checks.has_permissions(administrator=True)
     async def ticket(self, interaction: discord.Interaction):
         embed = discord.Embed(
             title="مركز التكتات والمساعدة 🎫",
-            description="اختر القسم المناسب من الأزرار بالأسفل لفتح تكت جديد وتعبئة التفاصيل:",
+            description="اختر القسم المناسب من الأزرار بالأسفل:",
             color=discord.Color.blue()
         )
         embed.set_image(url="https://cdn.discordapp.com/attachments/1536682727531745291/1538123383462436884/file_00000000876482468a3bff92f21e3939.png?ex=6a818887&is=6a803707&hm=d216e646dc54fb9eee3ee9b3a99d1838fe96619fe3447150d094d03f9cf22964&")
