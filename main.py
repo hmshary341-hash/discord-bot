@@ -13,7 +13,12 @@ def keep_alive(): Thread(target=run).start()
 
 class MyBot(commands.Bot):
     def __init__(self):
-        super().__init__(command_prefix="!", intents=discord.Intents.default())
+        # تفعيل الصلاحيات (Intents) وخصوصاً الأعضاء للترحيب
+        intents = discord.Intents.default()
+        intents.members = True  # ضروري جداً لكي يعمل الترحيب والمغادرة
+        intents.message_content = True
+        
+        super().__init__(command_prefix="!", intents=intents)
 
     async def setup_hook(self):
         # 1. تحميل الملفات
