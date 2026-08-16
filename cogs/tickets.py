@@ -5,6 +5,13 @@ import asyncio
 from datetime import datetime
 import os
 
+# آيدي رتب الإدارة الثلاثة
+STAFF_ROLE_IDS = [
+    1538498863890173952,
+    1536685496619630722,
+    1536685263894347887
+]
+
 # دالة لإنشاء رقم تسلسلي متصاعد وحفظه
 def get_next_ticket_number():
     counter_file = "ticket_counter.txt"
@@ -77,7 +84,7 @@ class TicketMainView(discord.ui.View):
     async def promotion(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(PromotionModal())
 
-# أزرار التحكم (محمية برتبة الإدارة المحددة)
+# أزرار التحكم (محمية برتب الإدارة الثلاثة)
 class TicketControlView(discord.ui.View):
     def __init__(self, user, open_time, ticket_type, ticket_number):
         super().__init__(timeout=None)
@@ -90,8 +97,7 @@ class TicketControlView(discord.ui.View):
 
     @discord.ui.button(label="استلام التكت", style=discord.ButtonStyle.green, emoji="🙋‍♂️", custom_id="claim_ticket")
     async def claim(self, interaction: discord.Interaction, button: discord.ui.Button):
-        staff_role_id = 1538498863890173952
-        has_role = any(role.id == staff_role_id for role in interaction.user.roles)
+        has_role = any(role.id in STAFF_ROLE_IDS for role in interaction.user.roles)
         
         if not (has_role or interaction.user.guild_permissions.administrator):
             return await interaction.response.send_message("هذا الزر مخصص للإدارة فقط!", ephemeral=True)
@@ -106,8 +112,7 @@ class TicketControlView(discord.ui.View):
 
     @discord.ui.button(label="إغلاق التكت", style=discord.ButtonStyle.danger, emoji="🔒", custom_id="close_ticket")
     async def close(self, interaction: discord.Interaction, button: discord.ui.Button):
-        staff_role_id = 1538498863890173952
-        has_role = any(role.id == staff_role_id for role in interaction.user.roles)
+        has_role = any(role.id in STAFF_ROLE_IDS for role in interaction.user.roles)
         
         if not (has_role or interaction.user.guild_permissions.administrator):
             return await interaction.response.send_message("هذا الزر مخصص للإدارة فقط!", ephemeral=True)
@@ -142,16 +147,17 @@ async def create_ticket_channel(interaction: discord.Interaction, ticket_type: s
     
     ticket_number, ticket_num_clean = get_next_ticket_number()
 
-    # جلب رتبة الإدارة وإعطائها الصلاحيات في التكت
-    staff_role = guild.get_role(1538498863890173952)
-
     overwrites = {
         guild.default_role: discord.PermissionOverwrite(view_channel=False),
         interaction.user: discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True)
     }
     
-    if staff_role:
-        overwrites[staff_role] = discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True)
+    mentions = []
+    for r_id in STAFF_ROLE_IDS:
+        role = guild.get_role(r_id)
+        if role:
+            overwrites[role] = discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True)
+            mentions.append(role.mention)
 
     channel = await guild.create_text_channel(
         name=f"ticket-{ticket_num_clean}",
@@ -163,7 +169,10 @@ async def create_ticket_channel(interaction: discord.Interaction, ticket_type: s
     embed = create_ticket_embed(interaction.user, ticket_type, open_time, ticket_number=ticket_number)
     
     view = TicketControlView(interaction.user, open_time, ticket_type, ticket_number)
-    await channel.send(embed=embed, view=view)
+    
+    # منشن الرتب الثلاث في رسالة التكت لكي يتم إشعارهم
+    role_mentions_text = " ".join(mentions) if mentions else ""
+    await channel.send(content=role_mentions_text, embed=embed, view=view)
     
     details_embed = discord.Embed(title="تفاصيل التكت", color=discord.Color.green())
     for k, v in details.items():
