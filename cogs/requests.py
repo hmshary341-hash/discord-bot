@@ -168,7 +168,7 @@ class RequestActionView(discord.ui.View):
                     f"🔑 **كود التوثيق:** `{verify_code}`\n"
                     f"🆔 **رقم الطلب:** `#{self.req_num}`\n\n"
                     f"⚠️ **ملاحظة هامة:**\n"
-                    f"الكود ذا افتحي دعم فني ووريهم صوره للكود ورقم الطلب، لكن والله لو كنت ولد والجاي تستهبل لا أصفقك باند وتايم 🚫."
+                    f"الكود ذا افتحي دعم فني ووريهم صوره للكود ورقم الطلب، لكن والله لو كنت ولد وجاي تستهبل لا أصفقك باند وتايم 🚫."
                 )
                 await self.target_user.send(dm_text)
             except:
@@ -207,7 +207,7 @@ class Requests(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @app_commands.command(name='setup_requests', description='إرسال لوحة الطلبات في الروم المحدد')
+    @app_commands.command(name='requests', description='إرسال لوحة الطلبات في الروم المحدد')
     @app_commands.checks.has_permissions(administrator=True)
     async def setup_requests(self, interaction: discord.Interaction):
         channel = interaction.guild.get_channel(PANEL_CHANNEL_ID)
