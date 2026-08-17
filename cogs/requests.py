@@ -207,7 +207,7 @@ class Requests(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @app_commands.command(name='requests', description='إرسال لوحة الطلبات في الروم المحدد')
+    @app_commands.command(name='طلب', description='إرسال لوحة الطلبات في الروم المحدد')
     @app_commands.checks.has_permissions(administrator=True)
     async def setup_requests(self, interaction: discord.Interaction):
         channel = interaction.guild.get_channel(PANEL_CHANNEL_ID)
