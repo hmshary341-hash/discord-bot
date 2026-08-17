@@ -73,10 +73,10 @@ class ScenarioButtonView(discord.ui.View):
             return await interaction.response.send_message("❌ عذراً، لا يوجد تقديم معلق أو انتهت الصلاحية. يرجى إعادة التقديم من السيرفر.", ephemeral=True)
         await interaction.response.send_modal(ScenarioModal())
 
-# خانة إجابة السيناريو
+# خانة إجابة السيناريو (تم تقصير العنوان ليتوافق مع شروط ديسكورد أقل من 45 حرف)
 class ScenarioModal(discord.ui.Modal, title="سؤال السيناريو"):
     scenario_answer = discord.ui.TextInput(
-        label="وش بتسوي لو شفت واحد يقرب لك أو خويك خالف القوانين؟",
+        label="تصرفك لو خويك خالف قوانين السيرفر؟",
         style=discord.TextStyle.paragraph,
         placeholder="اكتب تصرفك بالتفصيل هنا...",
         required=True
