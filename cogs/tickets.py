@@ -170,7 +170,6 @@ async def create_ticket_channel(interaction: discord.Interaction, ticket_type: s
     
     view = TicketControlView(interaction.user, open_time, ticket_type, ticket_number)
     
-    # منشن الرتب الثلاث في رسالة التكت لكي يتم إشعارهم
     role_mentions_text = " ".join(mentions) if mentions else ""
     await channel.send(content=role_mentions_text, embed=embed, view=view)
     
@@ -197,4 +196,5 @@ class Tickets(commands.Cog):
         await interaction.response.send_message(embed=embed, view=TicketMainView())
 
 async def setup(bot):
+    bot.add_view(TicketMainView())
     await bot.add_cog(Tickets(bot))
