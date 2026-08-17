@@ -148,7 +148,7 @@ class Apply(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @app_commands.command(name='تقديم إدارة', description='إرسال لوحة التقديمات')
+    @app_commands.command(name='apply', description='إرسال لوحة التقديمات')
     @app_commands.checks.has_permissions(administrator=True)
     async def setup_apply(self, interaction: discord.Interaction):
         channel = interaction.guild.get_channel(APPLY_PANEL_CHANNEL_ID)
