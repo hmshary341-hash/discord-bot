@@ -3,6 +3,8 @@ from discord.ext import commands
 from discord import app_commands
 import os
 import json
+import random
+import string
 
 # آيديات الرومات والرتب المطلوبة
 APPLY_PANEL_CHANNEL_ID = 1537196996668956682  # روم لوحة التقديم
@@ -14,19 +16,20 @@ STAFF_ROLE_IDS = [
     1536685263894347887
 ]
 
-PENDING_FILE = "pending_apps.json"
+# قاعدة البيانات (ملف الحفظ)
+DATABASE_FILE = "database.json"
 
-def load_pending():
-    if os.path.exists(PENDING_FILE):
+def load_database():
+    if os.path.exists(DATABASE_FILE):
         try:
-            with open(PENDING_FILE, "r", encoding="utf-8") as f:
+            with open(DATABASE_FILE, "r", encoding="utf-8") as f:
                 return json.load(f)
         except:
-            return {}
-    return {}
+            return {"pending": {}, "accepted": {}}
+    return {"pending": {}, "accepted": {}}
 
-def save_pending(data):
-    with open(PENDING_FILE, "w", encoding="utf-8") as f:
+def save_database(data):
+    with open(DATABASE_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
 
 # 1. الاستمارة الأولى (البيانات الأساسية)
@@ -39,15 +42,15 @@ class FirstApplicationModal(discord.ui.Modal, title="استمارة التقدي
 
     async def on_submit(self, interaction: discord.Interaction):
         user_id = str(interaction.user.id)
-        pending = load_pending()
-        pending[user_id] = {
+        db = load_database()
+        db["pending"][user_id] = {
             "real_name": self.real_name.value,
             "username": self.username.value,
             "age": self.age.value,
             "experience": self.experience.value,
             "benefit": self.benefit.value
         }
-        save_pending(pending)
+        save_database(db)
         
         try:
             view = ScenarioButtonView()
@@ -68,12 +71,12 @@ class ScenarioButtonView(discord.ui.View):
     @discord.ui.button(label="إجابة سؤال السيناريو", style=discord.ButtonStyle.primary, emoji="✍️", custom_id="open_scenario_modal_persistent")
     async def open_scenario(self, interaction: discord.Interaction, button: discord.ui.Button):
         user_id = str(interaction.user.id)
-        pending = load_pending()
-        if user_id not in pending:
+        db = load_database()
+        if user_id not in db["pending"]:
             return await interaction.response.send_message("❌ عذراً، لا يوجد تقديم معلق أو انتهت الصلاحية. يرجى إعادة التقديم من السيرفر.", ephemeral=True)
         await interaction.response.send_modal(ScenarioModal())
 
-# خانة إجابة السيناريو (تم تقصير العنوان ليتوافق مع شروط ديسكورد أقل من 45 حرف)
+# خانة إجابة السيناريو
 class ScenarioModal(discord.ui.Modal, title="سؤال السيناريو"):
     scenario_answer = discord.ui.TextInput(
         label="تصرفك لو خويك خالف قوانين السيرفر؟",
@@ -84,12 +87,12 @@ class ScenarioModal(discord.ui.Modal, title="سؤال السيناريو"):
 
     async def on_submit(self, interaction: discord.Interaction):
         user_id = str(interaction.user.id)
-        pending = load_pending()
-        if user_id not in pending:
+        db = load_database()
+        if user_id not in db["pending"]:
             return await interaction.response.send_message("❌ عذراً، حدث خطأ أو انتهت الجلسة.", ephemeral=True)
         
-        data = pending.pop(user_id)
-        save_pending(pending)
+        data = db["pending"].pop(user_id)
+        save_database(db)
         
         data["scenario"] = self.scenario_answer.value
         
@@ -139,16 +142,38 @@ class ApplicationActionView(discord.ui.View):
         if not (has_role or interaction.user.guild_permissions.administrator):
             return await interaction.response.send_message("هذا الزر مخصص للإدارة فقط!", ephemeral=True)
 
+        # توليد كود من 11 حرف ورقم طلب عشوائي
+        auth_code = ''.join(random.choices(string.ascii_letters + string.digits, k=11))
+        request_id = random.randint(1000, 9999)
+
+        # حفظ البيانات المقبولة في قاعدة البيانات
+        db = load_database()
+        db["accepted"][str(self.target_user.id)] = {
+            "auth_code": auth_code,
+            "request_id": request_id,
+            "rank": "إداري جديد"
+        }
+        save_database(db)
+
         for child in self.children:
             child.disabled = True
         await interaction.message.edit(view=self)
 
+        success_message = (
+            f"🎉 **مبروك! تم قبول طلب انضمامك لطاقم الإدارة.**\n\n"
+            f"🏷️ **الرتبة:** إداري جديد\n"
+            f"🆔 **رقم الطلب:** `#{request_id}`\n"
+            f"🔑 **كود التوثيق:** `{auth_code}`\n\n"
+            f"📌 **ملاحظة هامة:**\n"
+            f"يرجى فتح تكت دعم فني وإرسال صورة للكود ورقم الطلب داخل التكت!"
+        )
+
         try:
-            await self.target_user.send("🎉 **مبروك! تم قبول طلب انضمامك لطاقم الإدارة.**")
+            await self.target_user.send(success_message)
         except:
             pass
 
-        await interaction.response.send_message(f"تم قبول التقديم بواسطة {interaction.user.mention}.", ephemeral=True)
+        await interaction.response.send_message(f"تم قبول التقديم بواسطة {interaction.user.mention} وإرسال بيانات التوثيق للمتقدم.", ephemeral=True)
 
     @discord.ui.button(label="رفض", style=discord.ButtonStyle.danger, emoji="❌", custom_id="reject_apply_action_perm")
     async def reject(self, interaction: discord.Interaction, button: discord.ui.Button):
