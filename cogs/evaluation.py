@@ -2,20 +2,20 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 
-# آيديات الرومات
-EVAL_PANEL_CHANNEL_ID = 1538837810407145512   # روم إرسال لوحة التقييم
-EVAL_LOG_CHANNEL_ID = 1538838112564944926     # روم استقبال التقييمات
+# آيديات الرومات المحدثة حسب طلبك
+EVAL_PANEL_CHANNEL_ID = 1538838112564944926   # روم إرسال لوحة التقييم
+EVAL_LOG_CHANNEL_ID = 1538837810407145512     # روم استقبال التقييمات
 
-# 1. القائمة الأولى (التحذير + زر بدء التقييم)
+# 1. القائمة الأولى (التحذير + زر بدء التقييم - دائم)
 class EvaluationStartView(discord.ui.View):
     def __init__(self):
-        super().__init__(timeout=None) # الزر ماله مدة (دائم)
+        super().__init__(timeout=None)
 
     @discord.ui.button(label="ابدأ التقييم", style=discord.ButtonStyle.primary, emoji="⭐", custom_id="start_eval_button_perm")
     async def start_eval(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(EvaluationModal())
 
-# 2. نافذة أسئلة التقييم (السبب، يوزر الإداري، والنجوم)
+# 2. نافذة أسئلة التقييم
 class EvaluationModal(discord.ui.Modal, title="تقييم الإدارة"):
     staff_username = discord.ui.TextInput(
         label="يوزر الإداري المراد تقييمه",
@@ -46,6 +46,7 @@ class EvaluationModal(discord.ui.Modal, title="تقييم الإدارة"):
         rating_num = int(star_val)
         stars_display = "⭐" * rating_num
 
+        # إرسال التقييم إلى روم الاستقبال المحدد
         log_channel = None
         for guild in interaction.client.guilds:
             ch = guild.get_channel(EVAL_LOG_CHANNEL_ID)
@@ -65,14 +66,23 @@ class EvaluationModal(discord.ui.Modal, title="تقييم الإدارة"):
 
             await log_channel.send(embed=embed)
 
-        await interaction.response.send_message("✅ شكراً لك، تم إرسال تقييمك بنجاح!", ephemeral=True)
+        # إرسال رسالة شكر في الخاص للعضو
+        try:
+            await interaction.user.send(
+                "🌟 **شكراً لك على تقييمك!**\n"
+                "نحن نقدر حرصك ومساهمتك في تحسين جودة طاقم الإدارة ومصداقية العمل في السيرفر."
+            )
+        except:
+            pass # في حال كان الخاص مغلقاً
+
+        await interaction.response.send_message("✅ شكراً لك، تم إرسال تقييمك بنجاح وتفقد رسائل الخاص!", ephemeral=True)
 
 # 3. الكوج الخاص بنظام التقييم وإرسال اللوحة
 class Evaluation(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @app_commands.command(name='evaluation', description='إرسال لوحة تقييم الإدارة')
+    @app_commands.command(name='setup_evaluation', description='إرسال لوحة تقييم الإدارة')
     @app_commands.checks.has_permissions(administrator=True)
     async def setup_evaluation(self, interaction: discord.Interaction):
         channel = interaction.guild.get_channel(EVAL_PANEL_CHANNEL_ID)
