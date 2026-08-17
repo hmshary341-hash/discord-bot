@@ -184,7 +184,7 @@ class Tickets(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @app_commands.command(name='ticket', description='فتح مركز التكتات والمساعدة')
+    @app_commands.command(name='تكت', description='فتح مركز التكتات والمساعدة')
     @app_commands.checks.has_permissions(administrator=True)
     async def ticket(self, interaction: discord.Interaction):
         embed = discord.Embed(
