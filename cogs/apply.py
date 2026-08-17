@@ -2,6 +2,7 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 import os
+import json
 
 # آيديات الرومات والرتب المطلوبة
 APPLY_PANEL_CHANNEL_ID = 1537196996668956682  # روم لوحة التقديم
@@ -13,6 +14,21 @@ STAFF_ROLE_IDS = [
     1536685263894347887
 ]
 
+PENDING_FILE = "pending_apps.json"
+
+def load_pending():
+    if os.path.exists(PENDING_FILE):
+        try:
+            with open(PENDING_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except:
+            return {}
+    return {}
+
+def save_pending(data):
+    with open(PENDING_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=4)
+
 # 1. الاستمارة الأولى (البيانات الأساسية)
 class FirstApplicationModal(discord.ui.Modal, title="استمارة التقديم الإداري"):
     real_name = discord.ui.TextInput(label="اسمك الحقيقي", placeholder="اكتب اسمك الحقيقي هنا", required=True)
@@ -22,18 +38,19 @@ class FirstApplicationModal(discord.ui.Modal, title="استمارة التقدي
     benefit = discord.ui.TextInput(label="وش بنستفيد منك", style=discord.TextStyle.paragraph, placeholder="اكتب ماذا ستقدم للسيرفر...", required=True)
 
     async def on_submit(self, interaction: discord.Interaction):
-        # تخزين البيانات مؤقتاً في كائن ليتم دمجه لاحقاً
-        data = {
+        user_id = str(interaction.user.id)
+        pending = load_pending()
+        pending[user_id] = {
             "real_name": self.real_name.value,
             "username": self.username.value,
             "age": self.age.value,
             "experience": self.experience.value,
             "benefit": self.benefit.value
         }
+        save_pending(pending)
         
-        # إرسال رسالة في الخاص مع زر لفتح خانة السيناريو
         try:
-            view = ScenarioButtonView(data)
+            view = ScenarioButtonView()
             await interaction.user.send(
                 "📌 **ملاحظة هامة وتكملة التقديم:**\n"
                 "يرجى الضغط على الزر بالأسفل لفتح خانة السيناريو والإجابة على السؤال لإكمال تقديمك:",
@@ -43,15 +60,18 @@ class FirstApplicationModal(discord.ui.Modal, title="استمارة التقدي
         except discord.Forbidden:
             await interaction.response.send_message("❌ عذراً، خاصك مغلق! يرجى فتح الخاص وإعادة المحاولة.", ephemeral=True)
 
-# زر في الخاص يفتح نافذة السيناريو
+# زر دائم في الخاص يفتح نافذة السيناريو
 class ScenarioButtonView(discord.ui.View):
-    def __init__(self, data):
-        super().__init__(timeout=86400)
-        self.data = data
+    def __init__(self):
+        super().__init__(timeout=None)
 
-    @discord.ui.button(label="إجابة سؤال السيناريو", style=discord.ButtonStyle.primary, emoji="✍️", custom_id="open_scenario_modal")
+    @discord.ui.button(label="إجابة سؤال السيناريو", style=discord.ButtonStyle.primary, emoji="✍️", custom_id="open_scenario_modal_persistent")
     async def open_scenario(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_modal(ScenarioModal(self.data))
+        user_id = str(interaction.user.id)
+        pending = load_pending()
+        if user_id not in pending:
+            return await interaction.response.send_message("❌ عذراً، لا يوجد تقديم معلق أو انتهت الصلاحية. يرجى إعادة التقديم من السيرفر.", ephemeral=True)
+        await interaction.response.send_modal(ScenarioModal())
 
 # خانة إجابة السيناريو
 class ScenarioModal(discord.ui.Modal, title="سؤال السيناريو"):
@@ -62,14 +82,17 @@ class ScenarioModal(discord.ui.Modal, title="سؤال السيناريو"):
         required=True
     )
 
-    def __init__(self, data):
-        super().__init__()
-        self.data = data
-
     async def on_submit(self, interaction: discord.Interaction):
-        self.data["scenario"] = self.scenario_answer.value
+        user_id = str(interaction.user.id)
+        pending = load_pending()
+        if user_id not in pending:
+            return await interaction.response.send_message("❌ عذراً، حدث خطأ أو انتهت الجلسة.", ephemeral=True)
         
-        # البحث عن روم السجلات وإرسال التقديم كاملاً إليه
+        data = pending.pop(user_id)
+        save_pending(pending)
+        
+        data["scenario"] = self.scenario_answer.value
+        
         log_channel = None
         for guild in interaction.client.guilds:
             ch = guild.get_channel(APPLY_LOG_CHANNEL_ID)
@@ -83,12 +106,12 @@ class ScenarioModal(discord.ui.Modal, title="سؤال السيناريو"):
                 color=discord.Color.blue()
             )
             embed.add_field(name="「👤」 المتقدم", value=f"「 {interaction.user.mention} 」", inline=False)
-            embed.add_field(name="「📝」 الاسم الحقيقي", value=f"「 {self.data['real_name']} 」", inline=False)
-            embed.add_field(name="「🏷️」 اليوزر", value=f"「 {self.data['username']} 」", inline=False)
-            embed.add_field(name="「🎂」 العمر", value=f"「 {self.data['age']} 」", inline=False)
-            embed.add_field(name="「🛠️」 الخبرات", value=f"「 {self.data['experience']} 」", inline=False)
-            embed.add_field(name="「💡」 وش بنستفيد منك", value=f"「 {self.data['benefit']} 」", inline=False)
-            embed.add_field(name="「⚖️」 إجابة السيناريو", value=f"「 {self.data['scenario']} 」", inline=False)
+            embed.add_field(name="「📝」 الاسم الحقيقي", value=f"「 {data['real_name']} 」", inline=False)
+            embed.add_field(name="「🏷️」 اليوزر", value=f"「 {data['username']} 」", inline=False)
+            embed.add_field(name="「🎂」 العمر", value=f"「 {data['age']} 」", inline=False)
+            embed.add_field(name="「🛠️」 الخبرات", value=f"「 {data['experience']} 」", inline=False)
+            embed.add_field(name="「💡」 وش بنستفيد منك", value=f"「 {data['benefit']} 」", inline=False)
+            embed.add_field(name="「⚖️」 إجابة السيناريو", value=f"「 {data['scenario']} 」", inline=False)
 
             view = ApplicationActionView(interaction.user)
             await log_channel.send(embed=embed, view=view)
@@ -148,7 +171,7 @@ class Apply(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @app_commands.command(name='apply', description='إرسال لوحة التقديمات')
+    @app_commands.command(name='setup_apply', description='إرسال لوحة التقديمات')
     @app_commands.checks.has_permissions(administrator=True)
     async def setup_apply(self, interaction: discord.Interaction):
         channel = interaction.guild.get_channel(APPLY_PANEL_CHANNEL_ID)
@@ -167,4 +190,5 @@ class Apply(commands.Cog):
 
 async def setup(bot):
     bot.add_view(ApplicationPanelView())
+    bot.add_view(ScenarioButtonView())
     await bot.add_cog(Apply(bot))
