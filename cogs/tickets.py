@@ -5,14 +5,16 @@ import asyncio
 from datetime import datetime
 import os
 
-# آيدي رتب الإدارة الثلاثة
+# آيدي رتب الإدارة الثلاثة (من الكود الأصلي)
 STAFF_ROLE_IDS = [
     1538498863890173952,
     1536685496619630722,
     1536685263894347887
 ]
 
-# دالة لإنشاء رقم تسلسلي متصاعد وحفظه
+# آيدي رتبة النائب (استبدله بالآيدي الحقيقي إن وجد، أو اتركه 0)
+DEPUTY_ROLE_ID = 0  
+
 def get_next_ticket_number():
     counter_file = "ticket_counter.txt"
     num = 0
@@ -27,7 +29,6 @@ def get_next_ticket_number():
         f.write(str(num))
     return f"#{num:04d}", f"{num}"
 
-# 1. نموذج شكوى على إداري
 class StaffComplaintModal(discord.ui.Modal, title="شكوى على إداري"):
     staff_name = discord.ui.TextInput(label="يوزر أو مينشن الإداري", required=True)
     reason = discord.ui.TextInput(label="السبب", style=discord.TextStyle.paragraph, required=True)
@@ -40,7 +41,6 @@ class StaffComplaintModal(discord.ui.Modal, title="شكوى على إداري"):
             "الدليل": self.proof.value
         })
 
-# 2. نموذج شكوى على عضو
 class MemberComplaintModal(discord.ui.Modal, title="شكوى على عضو"):
     member_name = discord.ui.TextInput(label="يوزر أو مينشن العضو", required=True)
     reason = discord.ui.TextInput(label="السبب", style=discord.TextStyle.paragraph, required=True)
@@ -53,7 +53,6 @@ class MemberComplaintModal(discord.ui.Modal, title="شكوى على عضو"):
             "الدليل": self.proof.value
         })
 
-# 3. نموذج ترقية
 class PromotionModal(discord.ui.Modal, title="طلب ترقية"):
     old_rank = discord.ui.TextInput(label="رتبتك القديمة", required=True)
     new_rank = discord.ui.TextInput(label="رتبتك الجديدة المطلوبة", required=True)
@@ -63,6 +62,38 @@ class PromotionModal(discord.ui.Modal, title="طلب ترقية"):
             "رتبتك القديمة": self.old_rank.value,
             "رتبتك الجديدة": self.new_rank.value
         })
+
+class AddUserModal(discord.ui.Modal, title="إضافة عضو"):
+    user_id = discord.ui.TextInput(label="آيدي العضو", placeholder="ضع آيدي العضو هنا")
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            member = interaction.guild.get_member(int(self.user_id.value))
+            if member:
+                await interaction.channel.set_permissions(member, view_channel=True, send_messages=True)
+                await interaction.response.send_message(f"تمت إضافة {member.mention}", ephemeral=True)
+            else:
+                await interaction.response.send_message("لم يتم العثور على العضو!", ephemeral=True)
+        except:
+            await interaction.response.send_message("آيدي غير صالح!", ephemeral=True)
+
+class RemoveUserModal(discord.ui.Modal, title="إزالة عضو"):
+    user_id = discord.ui.TextInput(label="آيدي العضو", placeholder="ضع آيدي العضو هنا")
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            member = interaction.guild.get_member(int(self.user_id.value))
+            if member:
+                await interaction.channel.set_permissions(member, view_channel=False)
+                await interaction.response.send_message(f"تمت إزالة {member.mention}", ephemeral=True)
+            else:
+                await interaction.response.send_message("لم يتم العثور على العضو!", ephemeral=True)
+        except:
+            await interaction.response.send_message("آيدي غير صالح!", ephemeral=True)
+
+class RenameModal(discord.ui.Modal, title="تغيير اسم التكت"):
+    new_name = discord.ui.TextInput(label="الاسم الجديد")
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.channel.edit(name=self.new_name.value)
+        await interaction.response.send_message("تم تغيير الاسم!", ephemeral=True)
 
 class TicketMainView(discord.ui.View):
     def __init__(self):
@@ -84,7 +115,6 @@ class TicketMainView(discord.ui.View):
     async def promotion(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(PromotionModal())
 
-# أزرار التحكم (محمية برتب الإدارة الثلاثة)
 class TicketControlView(discord.ui.View):
     def __init__(self, user, open_time, ticket_type, ticket_number):
         super().__init__(timeout=None)
@@ -95,33 +125,71 @@ class TicketControlView(discord.ui.View):
         self.claimed_by = None
         self.claim_time = None
 
+    async def check_permissions(self, interaction: discord.Interaction):
+        has_role = any(role.id in STAFF_ROLE_IDS for role in interaction.user.roles)
+        is_admin = interaction.user.guild_permissions.administrator
+        if not (has_role or is_admin):
+            await interaction.response.send_message("❌ أنت لست مخولاً لذلك!", ephemeral=True)
+            return False
+        return True
+
     @discord.ui.button(label="استلام التكت", style=discord.ButtonStyle.green, emoji="🙋‍♂️", custom_id="claim_ticket")
     async def claim(self, interaction: discord.Interaction, button: discord.ui.Button):
-        has_role = any(role.id in STAFF_ROLE_IDS for role in interaction.user.roles)
+        if not await self.check_permissions(interaction): return
         
-        if not (has_role or interaction.user.guild_permissions.administrator):
-            return await interaction.response.send_message("هذا الزر مخصص للإدارة فقط!", ephemeral=True)
+        if self.claimed_by:
+            await interaction.response.send_message(f"⚠️ هذه التذكرة مستلمة بالفعل من الإداري: {self.claimed_by.mention}", ephemeral=True)
+            return
         
         self.claimed_by = interaction.user
-        self.claim_time = datetime.now().strftime("%I:%M %p | %d/%m/%Y")
-        button.disabled = True
+        self.claim_time = datetime.now().strftime("%I:%M %p")
         
-        embed = create_ticket_embed(self.user, self.ticket_type, self.open_time, self.claimed_by, self.claim_time, "مفتوح", self.ticket_number)
+        embed = create_ticket_embed(self.user, self.ticket_type, self.open_time, self.claimed_by, self.claim_time, "مستلمة", self.ticket_number)
         await interaction.response.edit_message(embed=embed, view=self)
         await interaction.followup.send(f"استلم التكت: {interaction.user.mention}")
 
-    @discord.ui.button(label="إغلاق التكت", style=discord.ButtonStyle.danger, emoji="🔒", custom_id="close_ticket")
-    async def close(self, interaction: discord.Interaction, button: discord.ui.Button):
-        has_role = any(role.id in STAFF_ROLE_IDS for role in interaction.user.roles)
+    @discord.ui.button(label="منشن الإدارة الكامل", style=discord.ButtonStyle.blurple, emoji="📢", custom_id="ping_all_admin")
+    async def ping_all(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not await self.check_permissions(interaction): return
         
-        if not (has_role or interaction.user.guild_permissions.administrator):
-            return await interaction.response.send_message("هذا الزر مخصص للإدارة فقط!", ephemeral=True)
+        staff_mentions = " ".join([f"<@&{r_id}>" for r_id in STAFF_ROLE_IDS])
+        owner_mention = f"<@{interaction.guild.owner_id}>"
+        deputy_mention = f"<@&{DEPUTY_ROLE_ID}>" if DEPUTY_ROLE_ID != 0 else ""
+        
+        await interaction.channel.send(f"📢 **تنبيه هام للإدارة:**\n{staff_mentions} {owner_mention} {deputy_mention}")
+        await interaction.response.send_message("تم منشن الإدارة وصاحب السيرفر والنائب.", ephemeral=True)
 
-        await interaction.response.send_message("جاري إغلاق التكت...", ephemeral=True)
-        await asyncio.sleep(2)
-        await interaction.channel.delete()
+    @discord.ui.select(placeholder="⚙️ خيارات التكت", options=[
+        discord.SelectOption(label="استدعاء صاحب التذكرة", value="come", emoji="📣"),
+        discord.SelectOption(label="إضافة عضو", value="add", emoji="➕"),
+        discord.SelectOption(label="إزالة عضو", value="remove", emoji="➖"),
+        discord.SelectOption(label="تغيير اسم التذكرة", value="rename", emoji="📝"),
+        discord.SelectOption(label="إلغاء الاستلام (Unclaim)", value="unclaim", emoji="❌"),
+        discord.SelectOption(label="إغلاق التذكرة", value="close", emoji="🔒")
+    ])
+    async def select_option(self, interaction: discord.Interaction, select: discord.ui.Select):
+        if not await self.check_permissions(interaction): return
 
-# وظيفة لتصميم رسالة التكت
+        val = select.values[0]
+        if val == "come":
+            await interaction.channel.send(f"{self.user.mention}، الإدارة تطلب حضورك.")
+            await interaction.response.send_message("تم استدعاء العضو.", ephemeral=True)
+        elif val == "add":
+            await interaction.response.send_modal(AddUserModal())
+        elif val == "remove":
+            await interaction.response.send_modal(RemoveUserModal())
+        elif val == "rename":
+            await interaction.response.send_modal(RenameModal())
+        elif val == "unclaim":
+            self.claimed_by = None
+            embed = create_ticket_embed(self.user, self.ticket_type, self.open_time, None, None, "مفتوح", self.ticket_number)
+            await interaction.response.edit_message(embed=embed, view=self)
+            await interaction.response.send_message("تم إلغاء الاستلام.", ephemeral=True)
+        elif val == "close":
+            await interaction.response.send_message("جاري إغلاق التذكرة...")
+            await asyncio.sleep(2)
+            await interaction.channel.delete()
+
 def create_ticket_embed(user, ticket_type, open_time, claimer=None, claim_time=None, status="مفتوح", ticket_number="#0001"):
     embed = discord.Embed(title="╭━━━━━━━━━━━━━━━━━━━━━━━━━━━━╮\n✦ 𝗧𝗜𝗖𝗞𝗘𝗧 𝗦𝗬𝗦𝗧𝗘𝗠 ✦\n╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯", color=discord.Color.blue())
     
@@ -172,12 +240,6 @@ async def create_ticket_channel(interaction: discord.Interaction, ticket_type: s
     
     role_mentions_text = " ".join(mentions) if mentions else ""
     await channel.send(content=role_mentions_text, embed=embed, view=view)
-    
-    details_embed = discord.Embed(title="تفاصيل التكت", color=discord.Color.green())
-    for k, v in details.items():
-        details_embed.add_field(name=k, value=v, inline=False)
-    await channel.send(embed=details_embed)
-
     await interaction.response.send_message(f"تم فتح التكت: {channel.mention}", ephemeral=True)
 
 class Tickets(commands.Cog):
