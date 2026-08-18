@@ -15,6 +15,9 @@ STAFF_ROLE_IDS = [
 # آيدي رتبة النائب (استبدله بالآيدي الحقيقي إن وجد، أو اتركه 0)
 DEPUTY_ROLE_ID = 0  
 
+# آيدي روم اللوق لإرسال نسخة التكتات المغلقة
+LOG_CHANNEL_ID = 1539139378222202942
+
 def get_next_ticket_number():
     counter_file = "ticket_counter.txt"
     num = 0
@@ -67,7 +70,6 @@ class AddUserModal(discord.ui.Modal, title="إضافة عضو"):
     user_input = discord.ui.TextInput(label="مينشن أو يوزر العضو", placeholder="@User أو اسم المستخدم")
     async def on_submit(self, interaction: discord.Interaction):
         try:
-            # محاولة استخراج العضو من المنشن أو الاسم
             query = self.user_input.value.strip()
             member = None
             if query.startswith("<@") and query.endswith(">"):
@@ -81,7 +83,7 @@ class AddUserModal(discord.ui.Modal, title="إضافة عضو"):
                 await interaction.response.send_message(f"تمت إضافة {member.mention} للتكت بنجاح!", ephemeral=True)
             else:
                 await interaction.response.send_message("لم يتم العثور على العضو، تأكد من اليوزر أو المنشن!", ephemeral=True)
-        except Exception as e:
+        except:
             await interaction.response.send_message("حدث خطأ، تأكد من كتابة اسم المستخدم بشكل صحيح.", ephemeral=True)
 
 class RemoveUserModal(discord.ui.Modal, title="إزالة عضو"):
@@ -130,16 +132,53 @@ class TicketMainView(discord.ui.View):
     async def promotion(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(PromotionModal())
 
-# أزرار تأكيد إغلاق التكت (نعم / لا)
+# أزرار تأكيد إغلاق التكت مع حفظ النسخة (Transcript) وإرسالها لروم اللوق
 class CloseConfirmView(discord.ui.View):
-    def __init__(self):
+    def __init__(self, ticket_user, ticket_type, ticket_number):
         super().__init__(timeout=60)
+        self.ticket_user = ticket_user
+        self.ticket_type = ticket_type
+        self.ticket_number = ticket_number
 
     @discord.ui.button(label="نعم", style=discord.ButtonStyle.green, emoji="✅")
     async def confirm_yes(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message("🔒 جاري إغلاق التذكرة وحذف القناة...", ephemeral=True)
+        await interaction.response.send_message("🔒 جاري حفظ النسخة وإغلاق التذكرة...", ephemeral=True)
+        
+        channel = interaction.channel
+        messages_history = []
+        async for message in channel.history(limit=None, oldest_first=True):
+            timestamp = message.created_at.strftime("%Y-%m-%d %H:%M:%S")
+            messages_history.append(f"[{timestamp}] {message.author}: {message.content}")
+            for att in message.attachments:
+                messages_history.append(f"  [مرفق: {att.url}]")
+        
+        transcript_text = "\n".join(messages_history)
+        filename = f"transcript-{channel.name}.txt"
+        
+        with open(filename, "w", encoding="utf-8") as f:
+            f.write(transcript_text)
+            
+        # إرسال النسخة والتقرير لروم اللوق المحدد
+        log_channel = interaction.guild.get_channel(LOG_CHANNEL_ID)
+        if log_channel:
+            embed = discord.Embed(
+                title="📁 أرشيف تذكرة مغلقة",
+                color=discord.Color.red(),
+                timestamp=datetime.now()
+            )
+            embed.add_field(name="رقم التذكرة", value=self.ticket_number, inline=True)
+            embed.add_field(name="نوع التذكرة", value=self.ticket_type, inline=True)
+            embed.add_field(name="صاحب التذكرة", value=self.ticket_user.mention, inline=True)
+            embed.add_field(name="أُغلق بواسطة", value=interaction.user.mention, inline=True)
+            
+            file = discord.File(filename, filename=filename)
+            await log_channel.send(embed=embed, file=file)
+            
+        if os.path.exists(filename):
+            os.remove(filename)
+
         await asyncio.sleep(2)
-        await interaction.channel.delete()
+        await channel.delete()
 
     @discord.ui.button(label="لا", style=discord.ButtonStyle.red, emoji="❌")
     async def confirm_no(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -163,7 +202,6 @@ class TicketControlView(discord.ui.View):
             return False
         return True
 
-    # زر استلام التكت (بجانب زر الإغلاق)
     @discord.ui.button(label="استلام التكت", style=discord.ButtonStyle.green, emoji="🙋‍♂️", custom_id="claim_ticket", row=0)
     async def claim(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not await self.check_permissions(interaction): return
@@ -179,13 +217,11 @@ class TicketControlView(discord.ui.View):
         await interaction.response.edit_message(embed=embed, view=self)
         await interaction.followup.send(f"استلم التكت: {interaction.user.mention}")
 
-    # زر إغلاق التكت (بجانب زر الاستلام في نفس السطر)
     @discord.ui.button(label="إغلاق التذكرة", style=discord.ButtonStyle.danger, emoji="🔒", custom_id="close_ticket_btn", row=0)
     async def close_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not await self.check_permissions(interaction): return
         
-        # رسالة هل تم حل المشكلة؟
-        view = CloseConfirmView()
+        view = CloseConfirmView(self.user, self.ticket_type, self.ticket_number)
         await interaction.response.send_message("❓ **هل تم حل المشكلة؟**", view=view, ephemeral=False)
 
     @discord.ui.button(label="منشن الإدارة الكامل", style=discord.ButtonStyle.blurple, emoji="📢", custom_id="ping_all_admin", row=1)
@@ -226,7 +262,7 @@ class TicketControlView(discord.ui.View):
             await interaction.response.edit_message(embed=embed, view=self)
             await interaction.response.send_message("تم إلغاء الاستلام.", ephemeral=True)
         elif val == "close":
-            view = CloseConfirmView()
+            view = CloseConfirmView(self.user, self.ticket_type, self.ticket_number)
             await interaction.response.send_message("❓ **هل تم حل المشكلة؟**", view=view, ephemeral=False)
 
 def create_ticket_embed(user, ticket_type, open_time, claimer=None, claim_time=None, status="مفتوح", ticket_number="#0001"):
