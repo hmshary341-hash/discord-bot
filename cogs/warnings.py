@@ -11,11 +11,11 @@ STAFF_ROLE_IDS = [
     1536685263894347887
 ]
 
-# رومات اللوق الخاصة بالتحذيرات والإجراءات
+# رومات اللوق المخصصة لكل إجراء بناءً على الآيدات الخاصة بك
 MOD_ROOMS = {
-    "بان / كيك": 1538837356348444712,  # روم البان والكيك
+    "بان": 1538837356348444712,       # روم البان
     "تايم آوت": 1538837520329080872,   # روم التايم آوت
-    "تحذير": 1538837627967512646     # روم التحذيرات
+    "كيك": 1538837627967512646        # روم الكيك
 }
 
 async def check_staff_permission(interaction: discord.Interaction):
@@ -26,7 +26,6 @@ async def check_staff_permission(interaction: discord.Interaction):
         return False
     return True
 
-# استبيان النصوص (يوزر الشخص، السبب، المدة)
 class ModTextModal(discord.ui.Modal):
     def __init__(self, action_type: str, bot):
         super().__init__(title=f"استبيان الإجراء: {action_type}")
@@ -45,7 +44,8 @@ class ModTextModal(discord.ui.Modal):
             required=True
         )
         
-        if action_type in ["بان / كيك", "تايم آوت"]:
+        # حقل المدة يظهر فقط للبان والتايم آوت
+        if action_type in ["بان", "تايم آوت"]:
             self.duration = discord.TextInput(
                 label="المدة (مثال: يوم، ساعة، دائم)",
                 placeholder="اكتب المدة المطلوبة هنا...",
@@ -62,25 +62,23 @@ class ModTextModal(discord.ui.Modal):
     async def on_submit(self, interaction: discord.Interaction):
         target = self.target_user.value
         reason = self.reason.value
-        duration_val = self.duration.value if self.duration else "غير محدد"
+        duration_val = self.duration.value if self.duration else "غير متاح (طرد فوري)"
         
-        # رسالة مؤقتة تطلب رفع الصورة من الشات
         await interaction.response.send_message(
             f"📸 **تم حفظ البيانات بنجاح!**\n"
-            f"الرجاء إرسال **صورة الدليل** الآن في الشات (باستخدام زر **+** من جهازك) خلال **60 ثانية**...",
+            f"الرجاء إرسال **صورة الدليل** الآن في الشات (باستخدام زر **+** من جهازك) خلال **120 ثانية**...",
             ephemeral=True
         )
 
-        # انتظار إرسال الصورة من نفس العضو وفي نفس الروم
         def check(m: discord.Message):
             return m.author.id == interaction.user.id and m.channel.id == interaction.channel.id and len(m.attachments) > 0
 
         try:
-            msg = await self.bot.wait_for('message', timeout=60.0, check=check)
+            # زيادة وقت الانتظار لرفع الصورة إلى 120 ثانية لراحة المستخدم من الجوال/الإيباد
+            msg = await self.bot.wait_for('message', timeout=120.0, check=check)
             proof_attachment = msg.attachments[0]
             image_url = proof_attachment.url
             
-            # محاولة حذف رسالة الصورة لترتيب الشات
             try:
                 await msg.delete()
             except:
@@ -90,46 +88,42 @@ class ModTextModal(discord.ui.Modal):
             await interaction.followup.send("⏰ انتهى الوقت ولم تقم بإرسال صورة الدليل. تم إلغاء العملية.", ephemeral=True)
             return
 
-        # تحديد روم اللوق المناسب
         target_room_id = MOD_ROOMS.get(self.action_type)
         log_channel = interaction.guild.get_channel(target_room_id)
         if not log_channel:
             await interaction.followup.send("⚠️ عذراً، روم اللوق الخاص بهذا الإجراء غير موجود أو خطأ في الآيدي!", ephemeral=True)
             return
 
-        # بناء التقرير وإرفاق الصورة بشكل مباشر
         embed = discord.Embed(
             title=f"╭━━━━━━━━━━━━━━━━━━━━━━━━━━━━╮\n✦ تقرير إجراء إداري: {self.action_type} ✦\n╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯",
-            color=discord.Color.red() if "بان" in self.action_type or "كيك" in self.action_type else discord.Color.orange(),
+            color=discord.Color.red() if self.action_type in ["بان", "كيك"] else discord.Color.orange(),
             timestamp=datetime.now()
         )
         embed.add_field(name="👤 العضو المخالف", value=f"「 {target} 」", inline=False)
         embed.add_field(name="🛡️ الإداري المسؤول", value=f"「 {interaction.user.mention} 」", inline=False)
         embed.add_field(name="📂 نوع الإجراء", value=f"「 {self.action_type} 」", inline=True)
         
-        if self.duration:
+        if self.action_type in ["بان", "تايم آوت"]:
             embed.add_field(name="⏱️ المدة", value=f"「 {duration_val} 」", inline=True)
             
         embed.add_field(name="📝 السبب", value=f"``` {reason} ```", inline=False)
-        
-        # عرض الصورة المرفوعة داخل الإيمبد مباشرة
         embed.set_image(url=image_url)
 
         await log_channel.send(embed=embed)
         await interaction.followup.send(f"✅ تم إرسال تقرير ({self.action_type}) بنجاح إلى الروم المخصص مع صورة الدليل!", ephemeral=True)
 
-# قائمة اختيار نوع العقوبة
 class ModSelectView(discord.ui.View):
     def __init__(self, bot):
-        super().__init__(timeout=180)
+        # رفع وقت انتهاء القائمة إلى 300 ثانية (5 دقائق) لتجنب انتهاء التفاعل بسرعة
+        super().__init__(timeout=300)
         self.bot = bot
 
     @discord.ui.select(
-        placeholder="📌 اختر نوع الإجراء أو التحذير المطلوب...",
+        placeholder="📌 اختر نوع الإجراء المطلوب...",
         options=[
-            discord.SelectOption(label="تحذير (Warning)", value="تحذير", emoji="⚠️", description="إرسال تحذير رسمي للعضو"),
             discord.SelectOption(label="تايم آوت (Timeout)", value="تايم آوت", emoji="⏳", description="إسكات العضو لفترة محددة"),
-            discord.SelectOption(label="بان / كيك (Ban / Kick)", value="بان / كيك", emoji="🔨", description="طرد أو حظر العضو من السيرفر")
+            discord.SelectOption(label="كيك (Kick)", value="كيك", emoji="👢", description="طرد العضو من السيرفر"),
+            discord.SelectOption(label="بان (Ban)", value="بان", emoji="🔨", description="حظر العضو نهائياً من السيرفر")
         ]
     )
     async def select_callback(self, interaction: discord.Interaction, select: discord.ui.Select):
@@ -139,9 +133,9 @@ class ModSelectView(discord.ui.View):
         selected_type = select.values[0]
         await interaction.response.send_modal(ModTextModal(selected_type, self.bot))
 
-# لوحة التحذيرات الرئيسية
 class ModMainView(discord.ui.View):
     def __init__(self, bot):
+        # جعل اللوحة الرئيسية دائمة ولا تنتهي صلاحيتها أبداً (timeout=None)
         super().__init__(timeout=None)
         self.bot = bot
 
@@ -157,16 +151,16 @@ class Warnings(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @app_commands.command(name='warnings_panel', description='إرسال لوحة إدارة التحذيرات والإجراءات')
+    @app_commands.command(name='warnings_panel', description='إرسال لوحة إدارة الإجراءات والعقوبات')
     @app_commands.checks.has_permissions(administrator=True)
     async def warnings_panel(self, interaction: discord.Interaction):
         embed = discord.Embed(
-            title="╭━━━━━━━━━━━━━━━━━━━━━━━━━━━━╮\n✦ لــوحــة نــظــام الــتــحــذيرات ✦\n╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯",
-            description="هذه اللوحة مخصصة للإدارة لتسجيل وإرسال تقارير العقوبات والإجراءات بدقة.\n\n"
-                        "• **التحذيرات:** لتسجيل المخالفات العادية.\n"
+            title="╭━━━━━━━━━━━━━━━━━━━━━━━━━━━━╮\n✦ لــوحــة الإجــراءات الإداريــة ✦\n╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯",
+            description="هذه اللوحة مخصصة للإدارة لتسجيل وإرسال تقارير العقوبات بدقة.\n\n"
                         "• **التايم آوت:** لإسكات الأعضاء المخالفين.\n"
-                        "• **الكيك / البان:** للطرد أو الحظر النهائي.\n\n"
-                        "اضغط على الزر بالأسفل لبدء الاستبيان المخصص:",
+                        "• **الكيك:** لطرد العضو من السيرفر.\n"
+                        "• **البان:** للحظر النهائي من السيرفر.\n\n"
+                        "اضغط على الزر بالأسفل لبدء الاستبيان:",
             color=discord.Color.dark_red()
         )
         embed.set_footer(text="نظام الحماية والإدارة الآلي")
