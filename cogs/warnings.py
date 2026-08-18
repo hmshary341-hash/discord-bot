@@ -32,6 +32,7 @@ class ModTextModal(discord.ui.Modal):
         self.action_type = action_type
         self.bot = bot
 
+        # تمرير العنوان كـ Positional بدون استخدام label= لتجنب أي خطأ في الإصدار
         self.target_user = discord.TextInput(
             "يوزر أو مينشن الشخص",
             placeholder="@User أو اسم المستخدم",
