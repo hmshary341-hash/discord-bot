@@ -5,7 +5,7 @@ import asyncio
 from datetime import datetime
 import os
 
-# آيدي رتب الإدارة الثلاثة (من الكود الأصلي)
+# آيدي رتب الإدارة الثلاثة
 STAFF_ROLE_IDS = [
     1538498863890173952,
     1536685496619630722,
@@ -64,36 +64,51 @@ class PromotionModal(discord.ui.Modal, title="طلب ترقية"):
         })
 
 class AddUserModal(discord.ui.Modal, title="إضافة عضو"):
-    user_id = discord.ui.TextInput(label="آيدي العضو", placeholder="ضع آيدي العضو هنا")
+    user_input = discord.ui.TextInput(label="مينشن أو يوزر العضو", placeholder="@User أو اسم المستخدم")
     async def on_submit(self, interaction: discord.Interaction):
         try:
-            member = interaction.guild.get_member(int(self.user_id.value))
+            # محاولة استخراج العضو من المنشن أو الاسم
+            query = self.user_input.value.strip()
+            member = None
+            if query.startswith("<@") and query.endswith(">"):
+                member_id = int(query.replace("<@", "").replace("!", "").replace(">", ""))
+                member = interaction.guild.get_member(member_id)
+            else:
+                member = discord.utils.get(interaction.guild.members, name=query) or discord.utils.get(interaction.guild.members, global_name=query)
+
             if member:
                 await interaction.channel.set_permissions(member, view_channel=True, send_messages=True)
-                await interaction.response.send_message(f"تمت إضافة {member.mention}", ephemeral=True)
+                await interaction.response.send_message(f"تمت إضافة {member.mention} للتكت بنجاح!", ephemeral=True)
             else:
-                await interaction.response.send_message("لم يتم العثور على العضو!", ephemeral=True)
-        except:
-            await interaction.response.send_message("آيدي غير صالح!", ephemeral=True)
+                await interaction.response.send_message("لم يتم العثور على العضو، تأكد من اليوزر أو المنشن!", ephemeral=True)
+        except Exception as e:
+            await interaction.response.send_message("حدث خطأ، تأكد من كتابة اسم المستخدم بشكل صحيح.", ephemeral=True)
 
 class RemoveUserModal(discord.ui.Modal, title="إزالة عضو"):
-    user_id = discord.ui.TextInput(label="آيدي العضو", placeholder="ضع آيدي العضو هنا")
+    user_input = discord.ui.TextInput(label="مينشن أو يوزر العضو", placeholder="@User أو اسم المستخدم")
     async def on_submit(self, interaction: discord.Interaction):
         try:
-            member = interaction.guild.get_member(int(self.user_id.value))
+            query = self.user_input.value.strip()
+            member = None
+            if query.startswith("<@") and query.endswith(">"):
+                member_id = int(query.replace("<@", "").replace("!", "").replace(">", ""))
+                member = interaction.guild.get_member(member_id)
+            else:
+                member = discord.utils.get(interaction.guild.members, name=query) or discord.utils.get(interaction.guild.members, global_name=query)
+
             if member:
                 await interaction.channel.set_permissions(member, view_channel=False)
-                await interaction.response.send_message(f"تمت إزالة {member.mention}", ephemeral=True)
+                await interaction.response.send_message(f"تمت إزالة {member.mention} من التكت.", ephemeral=True)
             else:
                 await interaction.response.send_message("لم يتم العثور على العضو!", ephemeral=True)
         except:
-            await interaction.response.send_message("آيدي غير صالح!", ephemeral=True)
+            await interaction.response.send_message("حدث خطأ، تأكد من البيانات المدخلة.", ephemeral=True)
 
 class RenameModal(discord.ui.Modal, title="تغيير اسم التكت"):
     new_name = discord.ui.TextInput(label="الاسم الجديد")
     async def on_submit(self, interaction: discord.Interaction):
         await interaction.channel.edit(name=self.new_name.value)
-        await interaction.response.send_message("تم تغيير الاسم!", ephemeral=True)
+        await interaction.response.send_message("تم تغيير الاسم بنجاح!", ephemeral=True)
 
 class TicketMainView(discord.ui.View):
     def __init__(self):
@@ -115,6 +130,21 @@ class TicketMainView(discord.ui.View):
     async def promotion(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(PromotionModal())
 
+# أزرار تأكيد إغلاق التكت (نعم / لا)
+class CloseConfirmView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=60)
+
+    @discord.ui.button(label="نعم", style=discord.ButtonStyle.green, emoji="✅")
+    async def confirm_yes(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message("🔒 جاري إغلاق التذكرة وحذف القناة...", ephemeral=True)
+        await asyncio.sleep(2)
+        await interaction.channel.delete()
+
+    @discord.ui.button(label="لا", style=discord.ButtonStyle.red, emoji="❌")
+    async def confirm_no(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.edit_message(content="تم إلغاء إغلاق التذكرة.", view=None)
+
 class TicketControlView(discord.ui.View):
     def __init__(self, user, open_time, ticket_type, ticket_number):
         super().__init__(timeout=None)
@@ -133,7 +163,8 @@ class TicketControlView(discord.ui.View):
             return False
         return True
 
-    @discord.ui.button(label="استلام التكت", style=discord.ButtonStyle.green, emoji="🙋‍♂️", custom_id="claim_ticket")
+    # زر استلام التكت (بجانب زر الإغلاق)
+    @discord.ui.button(label="استلام التكت", style=discord.ButtonStyle.green, emoji="🙋‍♂️", custom_id="claim_ticket", row=0)
     async def claim(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not await self.check_permissions(interaction): return
         
@@ -148,7 +179,16 @@ class TicketControlView(discord.ui.View):
         await interaction.response.edit_message(embed=embed, view=self)
         await interaction.followup.send(f"استلم التكت: {interaction.user.mention}")
 
-    @discord.ui.button(label="منشن الإدارة الكامل", style=discord.ButtonStyle.blurple, emoji="📢", custom_id="ping_all_admin")
+    # زر إغلاق التكت (بجانب زر الاستلام في نفس السطر)
+    @discord.ui.button(label="إغلاق التذكرة", style=discord.ButtonStyle.danger, emoji="🔒", custom_id="close_ticket_btn", row=0)
+    async def close_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not await self.check_permissions(interaction): return
+        
+        # رسالة هل تم حل المشكلة؟
+        view = CloseConfirmView()
+        await interaction.response.send_message("❓ **هل تم حل المشكلة؟**", view=view, ephemeral=False)
+
+    @discord.ui.button(label="منشن الإدارة الكامل", style=discord.ButtonStyle.blurple, emoji="📢", custom_id="ping_all_admin", row=1)
     async def ping_all(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not await self.check_permissions(interaction): return
         
@@ -166,7 +206,7 @@ class TicketControlView(discord.ui.View):
         discord.SelectOption(label="تغيير اسم التذكرة", value="rename", emoji="📝"),
         discord.SelectOption(label="إلغاء الاستلام (Unclaim)", value="unclaim", emoji="❌"),
         discord.SelectOption(label="إغلاق التذكرة", value="close", emoji="🔒")
-    ])
+    ], row=2)
     async def select_option(self, interaction: discord.Interaction, select: discord.ui.Select):
         if not await self.check_permissions(interaction): return
 
@@ -186,26 +226,25 @@ class TicketControlView(discord.ui.View):
             await interaction.response.edit_message(embed=embed, view=self)
             await interaction.response.send_message("تم إلغاء الاستلام.", ephemeral=True)
         elif val == "close":
-            await interaction.response.send_message("جاري إغلاق التذكرة...")
-            await asyncio.sleep(2)
-            await interaction.channel.delete()
+            view = CloseConfirmView()
+            await interaction.response.send_message("❓ **هل تم حل المشكلة؟**", view=view, ephemeral=False)
 
 def create_ticket_embed(user, ticket_type, open_time, claimer=None, claim_time=None, status="مفتوح", ticket_number="#0001"):
     embed = discord.Embed(title="╭━━━━━━━━━━━━━━━━━━━━━━━━━━━━╮\n✦ 𝗧𝗜𝗖𝗞𝗘𝗧 𝗦𝗬𝗦𝗧𝗘𝗠 ✦\n╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯", color=discord.Color.blue())
     
-    embed.add_field(name="「👤」 فــاتــح الــتــكــت", value=f"「 {user.mention} 」", inline=False)
-    embed.add_field(name="「🛡️」 مــســتــلــم الــتــكــت", value=f"「 {claimer.mention if claimer else 'لا يوجد'} 」", inline=False)
-    embed.add_field(name="「📂」 نــوع الــتــكــت", value=f"「 {ticket_type} 」", inline=False)
-    embed.add_field(name="「🕐」 وقــت فــتــح الــتــكــت", value=f"「 {open_time} 」", inline=False)
-    embed.add_field(name="「🆔」 رقــم الــتــكــت", value=f"「 {ticket_number} 」", inline=False)
-    embed.add_field(name="「📌」 حــالــة الــتــكــت", value=f"「 🟢 {status} 」", inline=False)
+    embed.add_field(name="👤 فــاتــح الــتــكــت", value=f" {user.mention} ", inline=False)
+    embed.add_field(name="🛡️ مــســتــلــم الــتــكــت", value=f" {claimer.mention if claimer else 'لا يوجد'} ", inline=False)
+    embed.add_field(name="📂 نــوع الــتــكــت", value=f" {ticket_type} ", inline=False)
+    embed.add_field(name="🕐 وقــت فــتــح الــتــكــت", value=f" {open_time} ", inline=False)
+    embed.add_field(name="🆔 رقــم الــتــكــت", value=f" {ticket_number} ", inline=False)
+    embed.add_field(name="📌 حــالــة الــتــكــت", value=f" 🟢 {status} ", inline=False)
     
     role_user = user.top_role.mention if hasattr(user, 'top_role') else "@عضو"
     role_claimer = claimer.top_role.mention if claimer and hasattr(claimer, 'top_role') else "لا يوجد"
     
     embed.add_field(name="\n╭━━━━━━━━━━━━━━━━━━━━━━━━━━━━╮\n✦ حــالــة الــتــكــت ✦\n╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯", value="", inline=False)
-    embed.add_field(name="「🔓」 فــتــح الــتــكــت بــواســطــة", value=f"「 {role_user} 」", inline=False)
-    embed.add_field(name="「🎫」 اســتــلام الــتــكــت بــواســطــة", value=f"「 {role_claimer} 」", inline=False)
+    embed.add_field(name="🔓 فــتــح الــتــكــت بــواســطــة", value=f" {role_user} ", inline=False)
+    embed.add_field(name="🎫 اســتــلام الــتــكــت بــواســطــة", value=f" {role_claimer} ", inline=False)
     
     return embed
 
@@ -247,7 +286,6 @@ class Tickets(commands.Cog):
         self.bot = bot
 
     @app_commands.command(name='tickets', description='فتح مركز التكتات والمساعدة')
-    @app_commands.checks.has_permissions(administrator=True)
     async def ticket(self, interaction: discord.Interaction):
         embed = discord.Embed(
             title="مركز التكتات والمساعدة 🎫",
