@@ -33,12 +33,12 @@ class ModTextModal(discord.ui.Modal):
         self.bot = bot
 
         self.target_user = discord.TextInput(
-            label="يوزر أو مينشن الشخص",
+            "يوزر أو مينشن الشخص",
             placeholder="@User أو اسم المستخدم",
             required=True
         )
         self.reason = discord.TextInput(
-            label="السبب",
+            "السبب",
             style=discord.TextStyle.paragraph,
             placeholder="اكتب سبب العقوبة بالتفصيل...",
             required=True
@@ -47,7 +47,7 @@ class ModTextModal(discord.ui.Modal):
         # حقل المدة يظهر فقط للبان والتايم آوت
         if action_type in ["بان", "تايم آوت"]:
             self.duration = discord.TextInput(
-                label="المدة (مثال: يوم، ساعة، دائم)",
+                "المدة (مثال: يوم، ساعة، دائم)",
                 placeholder="اكتب المدة المطلوبة هنا...",
                 required=True
             )
@@ -74,7 +74,6 @@ class ModTextModal(discord.ui.Modal):
             return m.author.id == interaction.user.id and m.channel.id == interaction.channel.id and len(m.attachments) > 0
 
         try:
-            # وقت مفتوح تماماً لرفع الصورة دون تقييد بزمن محدد
             msg = await self.bot.wait_for('message', timeout=None, check=check)
             proof_attachment = msg.attachments[0]
             image_url = proof_attachment.url
@@ -113,7 +112,6 @@ class ModTextModal(discord.ui.Modal):
 
 class ModSelectView(discord.ui.View):
     def __init__(self, bot):
-        # إلغاء المؤقت تماماً وجعل القائمة لا تنتهي أبداً
         super().__init__(timeout=None)
         self.bot = bot
 
@@ -135,7 +133,6 @@ class ModSelectView(discord.ui.View):
 
 class ModMainView(discord.ui.View):
     def __init__(self, bot):
-        # إلغاء المؤقت تماماً للوحة الرئيسية
         super().__init__(timeout=None)
         self.bot = bot
 
