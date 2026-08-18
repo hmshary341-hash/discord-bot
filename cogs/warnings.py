@@ -66,7 +66,7 @@ class ModTextModal(discord.ui.Modal):
         
         await interaction.response.send_message(
             f"📸 **تم حفظ البيانات بنجاح!**\n"
-            f"الرجاء إرسال **صورة الدليل** الآن في الشات (باستخدام زر **+** من جهازك) خلال **120 ثانية**...",
+            f"الرجاء إرسال **صورة الدليل** الآن في الشات (باستخدام زر **+** من جهازك) في أي وقت...",
             ephemeral=True
         )
 
@@ -74,8 +74,8 @@ class ModTextModal(discord.ui.Modal):
             return m.author.id == interaction.user.id and m.channel.id == interaction.channel.id and len(m.attachments) > 0
 
         try:
-            # زيادة وقت الانتظار لرفع الصورة إلى 120 ثانية لراحة المستخدم من الجوال/الإيباد
-            msg = await self.bot.wait_for('message', timeout=120.0, check=check)
+            # وقت مفتوح تماماً لرفع الصورة دون تقييد بزمن محدد
+            msg = await self.bot.wait_for('message', timeout=None, check=check)
             proof_attachment = msg.attachments[0]
             image_url = proof_attachment.url
             
@@ -84,8 +84,7 @@ class ModTextModal(discord.ui.Modal):
             except:
                 pass
 
-        except asyncio.TimeoutError:
-            await interaction.followup.send("⏰ انتهى الوقت ولم تقم بإرسال صورة الدليل. تم إلغاء العملية.", ephemeral=True)
+        except Exception:
             return
 
         target_room_id = MOD_ROOMS.get(self.action_type)
@@ -114,12 +113,13 @@ class ModTextModal(discord.ui.Modal):
 
 class ModSelectView(discord.ui.View):
     def __init__(self, bot):
-        # رفع وقت انتهاء القائمة إلى 300 ثانية (5 دقائق) لتجنب انتهاء التفاعل بسرعة
-        super().__init__(timeout=300)
+        # إلغاء المؤقت تماماً وجعل القائمة لا تنتهي أبداً
+        super().__init__(timeout=None)
         self.bot = bot
 
     @discord.ui.select(
         placeholder="📌 اختر نوع الإجراء المطلوب...",
+        custom_id="mod_select_persistent_menu",
         options=[
             discord.SelectOption(label="تايم آوت (Timeout)", value="تايم آوت", emoji="⏳", description="إسكات العضو لفترة محددة"),
             discord.SelectOption(label="كيك (Kick)", value="كيك", emoji="👢", description="طرد العضو من السيرفر"),
@@ -135,11 +135,11 @@ class ModSelectView(discord.ui.View):
 
 class ModMainView(discord.ui.View):
     def __init__(self, bot):
-        # جعل اللوحة الرئيسية دائمة ولا تنتهي صلاحيتها أبداً (timeout=None)
+        # إلغاء المؤقت تماماً للوحة الرئيسية
         super().__init__(timeout=None)
         self.bot = bot
 
-    @discord.ui.button(label="أبدا استبيان", style=discord.ButtonStyle.danger, emoji="📋", custom_id="start_mod_survey")
+    @discord.ui.button(label="أبدا استبيان", style=discord.ButtonStyle.danger, emoji="📋", custom_id="start_mod_survey_persistent")
     async def start_survey(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not await check_staff_permission(interaction):
             return
@@ -169,4 +169,5 @@ class Warnings(commands.Cog):
 
 async def setup(bot):
     bot.add_view(ModMainView(bot))
+    bot.add_view(ModSelectView(bot))
     await bot.add_cog(Warnings(bot))
