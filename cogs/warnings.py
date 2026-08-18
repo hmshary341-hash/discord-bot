@@ -33,7 +33,6 @@ class ModTextModal(discord.ui.Modal):
         self.action_type = action_type
         self.bot = bot
 
-        # تمرير النص مباشرة كـ Positional لتجنب خطأ الـ label تماماً
         self.target_user = discord.TextInput(
             "يوزر أو مينشن العضو المخالف",
             required=True
@@ -44,7 +43,6 @@ class ModTextModal(discord.ui.Modal):
             required=True
         )
         
-        # حقل المدة يظهر للبان والتايم آوت فقط
         if action_type in ["بان", "تايم آوت"]:
             self.duration = discord.TextInput(
                 "المدة (مثال: يوم، ساعة، دائم)",
@@ -115,7 +113,7 @@ class ModSelectView(discord.ui.View):
 
     @discord.ui.select(
         placeholder="📌 اختر نوع العقوبة أو الإجراء المطلوب...",
-        custom_id="mod_select_persistent_menu_warnings_v4",
+        custom_id="mod_select_persistent_menu_warnings_v5",
         options=[
             discord.SelectOption(label="تحذير (Warning)", value="تحذير", emoji="⚠️", description="إصدار تحذير رسمي"),
             discord.SelectOption(label="تايم آوت (Timeout)", value="تايم آوت", emoji="⏳", description="إسكات العضو"),
@@ -135,7 +133,7 @@ class ModMainView(discord.ui.View):
         super().__init__(timeout=None)
         self.bot = bot
 
-    @discord.ui.button(label="بدء استبيان العقوبات", style=discord.ButtonStyle.danger, emoji="📋", custom_id="start_mod_survey_warnings_v4")
+    @discord.ui.button(label="بدء استبيان العقوبات", style=discord.ButtonStyle.danger, emoji="📋", custom_id="start_mod_survey_warnings_v5")
     async def start_survey(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not await check_staff_permission(interaction):
             return
@@ -150,6 +148,9 @@ class Warnings(commands.Cog):
     @app_commands.command(name='warnings_panel', description='إرسال لوحة التحكم وإدارة العقوبات والتحذيرات')
     @app_commands.checks.has_permissions(administrator=True)
     async def warnings_panel(self, interaction: discord.Interaction):
+        # منع خطأ التايم أوت عبر عمل defer فوراً
+        await interaction.response.defer(ephemeral=True)
+        
         embed = discord.Embed(
             title="╭━━━━━━━━━━━━━━━━━━━━━━━━━━━━╮\n✦ لــوحــة الإجــراءات والـعـقـوبـات ✦\n╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯",
             description="هذه اللوحة مخصصة لطاقم الإدارة لتسجيل وإرسال التقارير الرسمية.\n\n"
@@ -162,7 +163,19 @@ class Warnings(commands.Cog):
         )
         embed.set_footer(text="نظام الإدارة والحماية الآلي")
         
-        await interaction.response.send_message(embed=embed, view=ModMainView(self.bot))
+        await interaction.followup.send(embed=embed, view=ModMainView(self.bot))
+
+    async def cog_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
+        if isinstance(error, app_commands.errors.MissingPermissions):
+            if interaction.response.is_done():
+                await interaction.followup.send("❌ عذراً، يجب أن تمتلك صلاحية المسؤول (Administrator) لاستخدام هذا الأمر!", ephemeral=True)
+            else:
+                await interaction.response.send_message("❌ عذراً، يجب أن تمتلك صلاحية المسؤول (Administrator) لاستخدام هذا الأمر!", ephemeral=True)
+        else:
+            if interaction.response.is_done():
+                await interaction.followup.send(f"⚠️ حدث خطأ أثناء تنفيذ الأمر: {error}", ephemeral=True)
+            else:
+                await interaction.response.send_message(f"⚠️ حدث خطأ أثناء تنفيذ الأمر: {error}", ephemeral=True)
 
 async def setup(bot):
     bot.add_view(ModMainView(bot))
