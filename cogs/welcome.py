@@ -2,7 +2,7 @@ import discord
 from discord.ext import commands
 
 # آيديات الرومات
-WELCOME_CHANNEL_ID = 1536708856695226408.
+WELCOME_CHANNEL_ID = 1536708856695226408
 LEAVE_CHANNEL_ID = 1536709079706378331
 
 class Welcome(commands.Cog):
