@@ -4,7 +4,7 @@ from discord import app_commands
 import os
 import json
 import random
-import strin
+import string
 
 # آيديات الرومات والرتب المطلوبة
 APPLY_PANEL_CHANNEL_ID = 1537196996668956682  # روم لوحة التقديم
