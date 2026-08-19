@@ -35,7 +35,7 @@ class MyBot(commands.Bot):
             print(f'تمت المزامنة بنجاح لـ {len(synced)} أمر في السيرفر.')
         except Exception as e:
             print(f'خطأ في المزامنة: {e}')
-
+.
 bot = MyBot()
 @bot.event
 async def on_ready():
