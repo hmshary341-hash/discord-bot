@@ -11,4 +11,4 @@ class General(commands.Cog):
         await ctx.send('Pong! 🏓 السيرفر شغال وزي الفل.')
 
 async def setup(bot):
-    await bot.add_cog(General(bot))
+    await bot.add_cog(General(bot)).
