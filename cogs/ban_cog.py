@@ -1,4 +1,5 @@
 import discord
+from discord import app_commands
 from discord.ext import commands
 
 
@@ -24,14 +25,12 @@ class BanModal(discord.ui.Modal, title="استبيان الحظر (Ban)"):
 class BanView(discord.ui.View):
 
   def __init__(self):
-    super().__init__(
-        timeout=None
-    )  # هذا يمنع انتهاء صلاحية الزر نهائياً
+    super().__init__(timeout=None)
 
   @discord.ui.button(
       label="بدء الاستبيان",
       style=discord.ButtonStyle.danger,
-      custom_id="persistent_ban_btn",  # معرف ثابت لضمان استمرارية الزر
+      custom_id="persistent_ban_btn",
   )
   async def start_form(
       self, interaction: discord.Interaction, button: discord.ui.Button
@@ -44,9 +43,11 @@ class BanCog(commands.Cog):
   def __init__(self, bot):
     self.bot = bot
 
-  @commands.command(name="setup_ban")
-  @commands.has_permissions(administrator=True)
-  async def setup_ban(self, ctx):
+  @app_commands.command(
+      name="setup_ban", description="نشر لوحة استبيان الحظر (الباند)"
+  )
+  @app_commands.checks.has_permissions(administrator=True)
+  async def setup_ban(self, interaction: discord.Interaction):
     embed = discord.Embed(
         title="⚖️ لوحة نظام الحظر (Ban)",
         description=(
@@ -58,11 +59,9 @@ class BanCog(commands.Cog):
         ),
         color=discord.Color.red(),
     )
-    await ctx.send(embed=embed, view=BanView())
+    await interaction.response.send_message(embed=embed, view=BanView())
 
 
 async def setup(bot):
-  bot.add_view(
-      BanView()
-  )  # تسجيل الزر ليبقى يعمل حتى لو تم إعادة تشغيل البوت
+  bot.add_view(BanView())
   await bot.add_cog(BanCog(bot))
