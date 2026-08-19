@@ -3,7 +3,7 @@ from discord.ext import commands
 from discord import app_commands
 import asyncio
 from datetime import datetime
-import o
+import os
 
 # آيدي رتب الإدارة الثلاثة
 STAFF_ROLE_IDS = [
