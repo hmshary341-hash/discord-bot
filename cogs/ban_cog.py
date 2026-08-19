@@ -2,7 +2,7 @@ import discord
 from discord.ext import commands
 
 
-class BanModal(discord.ui.Modal, title="استبيان الحظر (Ban)"):
+class BanModal(discord.ui.Modal, title="استبيان الحظر (Ban)"):.
   user_input = discord.ui.TextInput(
       label="يوزر العضو أو الأيدي",
       placeholder="اكتب اسم العضو أو الأيدي الخاص به هنا...",
