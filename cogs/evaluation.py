@@ -8,7 +8,7 @@ EVAL_LOG_CHANNEL_ID = 1538837810407145512     # روم استقبال التقي
 
 # 1. القائمة الأولى (التحذير + زر بدء التقييم - دائم)
 class EvaluationStartView(discord.ui.View):
-    def __init__(self):
+    def __init__(self):.
         super().__init__(timeout=None)
 
     @discord.ui.button(label="ابدأ التقييم", style=discord.ButtonStyle.primary, emoji="⭐", custom_id="start_eval_button_perm")
